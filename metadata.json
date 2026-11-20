@@ -1,0 +1,6 @@
+{
+  "name": "FAZA Player",
+  "description": "Ultra HD Android video player featuring 8K/4K playback, advanced gesture controls, customizable subtitles, permanent Now Playing bar, Picture-in-Picture, and dynamic update management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
