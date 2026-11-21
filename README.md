@@ -2,11 +2,6 @@
 
 A modern, dark-themed Android video player built with Jetpack Compose and AndroidX Media3, featuring local library management, network streaming, deep player UI customization, and an integrated AI assistant.
 
-[https://img.shields.io/badge/version-1.48%20Beta-blue]
-[https://img.shields.io/badge/package-apk.faza.go-2563EB]
-[https://img.shields.io/badge/Android-7.0%2B%20(API%2024]-green)
-[https://img.shields.io/badge/Target%20SDK-36%20(Android%2016]-brightgreen)
-
 ---
 
 ## Key Features
