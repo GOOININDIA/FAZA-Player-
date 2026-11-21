@@ -17,8 +17,8 @@ android {
     applicationId = "apk.faza.go"
     minSdk = 24
     targetSdk = 36
-    versionCode = 49
-    versionName = "1.47 Beta"
+    versionCode = 50
+    versionName = "1.48 Beta"
 
     manifestPlaceholders["ADMOB_APP_ID"] = "ca-app-pub-6572024129453689~5808434174"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -262,6 +262,15 @@ class FazaPlayerUnitTest {
         )
         assertEquals(-1f, clampedHx, 0.001f)
         assertEquals(1f, clampedVy, 0.001f)
+
+        // Optional animation defaults & duration speed scaling
+        assertEquals(com.example.data.model.AppIconOverlayAnimation.NONE, defaults.animation)
+        assertEquals(1.0f, defaults.animationSpeed, 0.001f)
+        assertTrue(defaults.animateOnlyWhilePlaying)
+        assertEquals(1400, com.example.ui.components.resolveAppIconAnimationDurationMs(1400, 1.0f))
+        assertEquals(700, com.example.ui.components.resolveAppIconAnimationDurationMs(1400, 2.0f))
+        assertEquals(2800, com.example.ui.components.resolveAppIconAnimationDurationMs(1400, 0.5f))
+        assertEquals(700, com.example.ui.components.resolveAppIconAnimationDurationMs(1400, 9.0f))
     }
 
     @Test

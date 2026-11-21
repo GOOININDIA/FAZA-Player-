@@ -182,6 +182,15 @@ enum class AppIconOverlayPosition(val label: String) {
         get() = this == BOTTOM_START || this == BOTTOM_END || this == BOTTOM_CENTER
 }
 
+enum class AppIconOverlayAnimation(val label: String) {
+    NONE("Off"),
+    PULSE("Pulse"),
+    FLOAT("Float"),
+    SPIN("Slow Spin"),
+    SHIMMER("Glow Pulse"),
+    SWING("Gentle Sway")
+}
+
 data class AppIconOverlayConfig(
     val enabled: Boolean = false,
     val style: AppIconOverlayStyle = AppIconOverlayStyle.ROUNDED_BADGE,
@@ -191,7 +200,10 @@ data class AppIconOverlayConfig(
     val opacity: Float = 0.85f,
     val showBorder: Boolean = true,
     val customXFraction: Float = 0.08f,
-    val customYFraction: Float = 0.12f
+    val customYFraction: Float = 0.12f,
+    val animation: AppIconOverlayAnimation = AppIconOverlayAnimation.NONE,
+    val animationSpeed: Float = 1.0f,
+    val animateOnlyWhilePlaying: Boolean = true
 )
 
 enum class PlayerAccentPreset(val label: String, val colorHex: Long?) {

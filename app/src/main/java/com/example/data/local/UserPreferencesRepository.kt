@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.data.model.AppColorSource
 import com.example.data.model.AppCustomColorPreset
+import com.example.data.model.AppIconOverlayAnimation
 import com.example.data.model.AppIconOverlayConfig
 import com.example.data.model.AppIconOverlayPosition
 import com.example.data.model.AppIconOverlayStyle
@@ -92,6 +93,9 @@ class UserPreferencesRepository(private val context: Context) {
         val AI_SHOW_BORDER = booleanPreferencesKey("app_icon_overlay_show_border")
         val AI_CUSTOM_X = floatPreferencesKey("app_icon_overlay_custom_x")
         val AI_CUSTOM_Y = floatPreferencesKey("app_icon_overlay_custom_y")
+        val AI_ANIMATION = stringPreferencesKey("app_icon_overlay_animation")
+        val AI_ANIMATION_SPEED = floatPreferencesKey("app_icon_overlay_animation_speed")
+        val AI_ANIMATE_ONLY_PLAYING = booleanPreferencesKey("app_icon_overlay_animate_only_playing")
 
         val PUI_THEME_STYLE = stringPreferencesKey("pui_theme_style")
         val PUI_ACCENT = stringPreferencesKey("pui_accent")
@@ -184,6 +188,10 @@ class UserPreferencesRepository(private val context: Context) {
             AppIconOverlayPosition.entries.find { it.name == name }
         } ?: AppIconOverlayPosition.TOP_START
 
+        val aiAnimation = prefs[Keys.AI_ANIMATION]?.let { name ->
+            AppIconOverlayAnimation.entries.find { it.name == name }
+        } ?: AppIconOverlayAnimation.NONE
+
         val puiThemeStyle = prefs[Keys.PUI_THEME_STYLE]?.let { name ->
             PlayerUiThemeStyle.entries.find { it.name == name }
         } ?: PlayerUiThemeStyle.FAZA_CLASSIC
@@ -268,7 +276,10 @@ class UserPreferencesRepository(private val context: Context) {
                 opacity = (prefs[Keys.AI_OPACITY] ?: 0.85f).coerceIn(0.20f, 1.0f),
                 showBorder = prefs[Keys.AI_SHOW_BORDER] ?: true,
                 customXFraction = (prefs[Keys.AI_CUSTOM_X] ?: 0.08f).coerceIn(0f, 1f),
-                customYFraction = (prefs[Keys.AI_CUSTOM_Y] ?: 0.12f).coerceIn(0f, 1f)
+                customYFraction = (prefs[Keys.AI_CUSTOM_Y] ?: 0.12f).coerceIn(0f, 1f),
+                animation = aiAnimation,
+                animationSpeed = (prefs[Keys.AI_ANIMATION_SPEED] ?: 1.0f).coerceIn(0.5f, 2.0f),
+                animateOnlyWhilePlaying = prefs[Keys.AI_ANIMATE_ONLY_PLAYING] ?: true
             ),
             playerUiConfig = PlayerUiConfig(
                 themeStyle = puiThemeStyle,
@@ -411,6 +422,9 @@ class UserPreferencesRepository(private val context: Context) {
             it[Keys.AI_SHOW_BORDER] = config.showBorder
             it[Keys.AI_CUSTOM_X] = config.customXFraction.coerceIn(0f, 1f)
             it[Keys.AI_CUSTOM_Y] = config.customYFraction.coerceIn(0f, 1f)
+            it[Keys.AI_ANIMATION] = config.animation.name
+            it[Keys.AI_ANIMATION_SPEED] = config.animationSpeed.coerceIn(0.5f, 2.0f)
+            it[Keys.AI_ANIMATE_ONLY_PLAYING] = config.animateOnlyWhilePlaying
         }
     }
 

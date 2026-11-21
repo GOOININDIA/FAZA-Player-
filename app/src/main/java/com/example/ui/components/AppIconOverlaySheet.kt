@@ -1,6 +1,13 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,7 +57,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -60,12 +70,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.model.AppIconOverlayAnimation
 import com.example.data.model.AppIconOverlayConfig
 import com.example.data.model.AppIconOverlayPosition
 import com.example.data.model.AppIconOverlayStyle
 import com.example.data.model.AppIconOverlayTheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+fun resolveAppIconAnimationDurationMs(baseDurationMs: Int, speedMultiplier: Float): Int {
+    val safeSpeed = speedMultiplier.coerceIn(0.5f, 2.0f)
+    return (baseDurationMs / safeSpeed).roundToInt().coerceAtLeast(350)
+}
 
 fun resolveAppIconOverlayBias(config: AppIconOverlayConfig): Pair<Float, Float> = when (config.position) {
     AppIconOverlayPosition.TOP_START -> -1f to -1f
@@ -90,7 +106,8 @@ fun resolveAppIconOverlayAlignment(config: AppIconOverlayConfig): Alignment {
 fun AlwaysOnAppIconOverlay(
     config: AppIconOverlayConfig,
     availableWidth: Dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPlaying: Boolean = true
 ) {
     if (!config.enabled) return
 
@@ -104,6 +121,105 @@ fun AlwaysOnAppIconOverlay(
     val safeOpacity = config.opacity.coerceIn(0.20f, 1.0f)
     val iconDp = (baseIconDp * safeScale).dp
     val labelSp = (baseIconDp * 0.44f * safeScale.coerceAtMost(1.35f)).sp
+
+    val shouldAnimate = config.animation != AppIconOverlayAnimation.NONE &&
+        (!config.animateOnlyWhilePlaying || isPlaying)
+    val density = LocalDensity.current
+    val floatOffsetPx = with(density) { 4.dp.toPx() }
+
+    var animScale = 1f
+    var animTranslationYPx = 0f
+    var animContainerRotation = 0f
+    var animEmblemRotation = 0f
+    var animAlphaMultiplier = 1f
+
+    if (shouldAnimate) {
+        val infiniteTransition = rememberInfiniteTransition(label = "app_icon_overlay_anim")
+        when (config.animation) {
+            AppIconOverlayAnimation.PULSE -> {
+                val pulseScale by infiniteTransition.animateFloat(
+                    initialValue = 0.93f,
+                    targetValue = 1.07f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(
+                            durationMillis = resolveAppIconAnimationDurationMs(1400, config.animationSpeed),
+                            easing = FastOutSlowInEasing
+                        ),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "app_icon_pulse"
+                )
+                animScale = pulseScale
+            }
+
+            AppIconOverlayAnimation.FLOAT -> {
+                val floatY by infiniteTransition.animateFloat(
+                    initialValue = -floatOffsetPx,
+                    targetValue = floatOffsetPx,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(
+                            durationMillis = resolveAppIconAnimationDurationMs(1800, config.animationSpeed),
+                            easing = FastOutSlowInEasing
+                        ),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "app_icon_float"
+                )
+                animTranslationYPx = floatY
+            }
+
+            AppIconOverlayAnimation.SPIN -> {
+                val spinAngle by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(
+                            durationMillis = resolveAppIconAnimationDurationMs(5200, config.animationSpeed),
+                            easing = LinearEasing
+                        ),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "app_icon_spin"
+                )
+                animEmblemRotation = spinAngle
+            }
+
+            AppIconOverlayAnimation.SHIMMER -> {
+                val shimmerProgress by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(
+                            durationMillis = resolveAppIconAnimationDurationMs(1600, config.animationSpeed),
+                            easing = FastOutSlowInEasing
+                        ),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "app_icon_shimmer"
+                )
+                animAlphaMultiplier = 0.62f + (0.38f * shimmerProgress)
+                animScale = 0.97f + (0.05f * shimmerProgress)
+            }
+
+            AppIconOverlayAnimation.SWING -> {
+                val swingAngle by infiniteTransition.animateFloat(
+                    initialValue = -8f,
+                    targetValue = 8f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(
+                            durationMillis = resolveAppIconAnimationDurationMs(1500, config.animationSpeed),
+                            easing = FastOutSlowInEasing
+                        ),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "app_icon_swing"
+                )
+                animContainerRotation = swingAngle
+            }
+
+            AppIconOverlayAnimation.NONE -> Unit
+        }
+    }
 
     val palette = when (config.theme) {
         AppIconOverlayTheme.MATERIAL_YOU -> AppIconOverlayPalette(
@@ -154,7 +270,13 @@ fun AlwaysOnAppIconOverlay(
 
     Box(
         modifier = modifier
-            .alpha(safeOpacity)
+            .graphicsLayer {
+                scaleX = animScale
+                scaleY = animScale
+                translationY = animTranslationYPx
+                rotationZ = animContainerRotation
+                alpha = (safeOpacity * animAlphaMultiplier).coerceIn(0.15f, 1.0f)
+            }
             .semantics(mergeDescendants = true) {
                 contentDescription = "FAZA Player app icon"
             }
@@ -166,6 +288,7 @@ fun AlwaysOnAppIconOverlay(
                 contentDescription = null,
                 modifier = Modifier
                     .size((iconDp.value * 1.2f).dp)
+                    .graphicsLayer { rotationZ = animEmblemRotation }
                     .clip(RoundedCornerShape(8.dp))
             )
         } else {
@@ -188,6 +311,7 @@ fun AlwaysOnAppIconOverlay(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size((iconDp.value * 0.88f).dp)
+                                    .graphicsLayer { rotationZ = animEmblemRotation }
                                     .clip(RoundedCornerShape(6.dp))
                             )
                             Spacer(modifier = Modifier.width((6f * safeScale.coerceAtMost(1.2f)).dp))
@@ -218,6 +342,7 @@ fun AlwaysOnAppIconOverlay(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(iconDp)
+                                    .graphicsLayer { rotationZ = animEmblemRotation }
                                     .clip(
                                         if (config.style == AppIconOverlayStyle.CIRCLE_BADGE) {
                                             CircleShape
@@ -516,6 +641,137 @@ fun AppIconOverlayStyleEditor(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Reset to Top Left")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Optional Icon Animation
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val speedPresets = listOf(
+                    "Slow" to 0.65f,
+                    "Normal" to 1.0f,
+                    "Fast" to 1.5f,
+                    "Max" to 2.0f
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text("Animation (Optional)", style = MaterialTheme.typography.titleSmall)
+                    }
+                    Text(
+                        text = config.animation.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.testTag("app_icon_animation_summary")
+                    )
+                }
+                Text(
+                    text = "Keep the icon static (Off) or enable a subtle motion effect during playback.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    AppIconOverlayAnimation.entries.forEach { anim ->
+                        FilterChip(
+                            selected = config.animation == anim,
+                            onClick = { onConfigChange(config.copy(animation = anim)) },
+                            label = { Text(anim.label) },
+                            modifier = Modifier.testTag("app_icon_anim_${anim.name.lowercase()}")
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = config.animation != AppIconOverlayAnimation.NONE) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .testTag("app_icon_animation_controls")
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Animation Speed", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    text = "${"%.2f".format(config.animationSpeed.coerceIn(0.5f, 2.0f)).trimEnd('0').trimEnd('.')}x",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                speedPresets.forEach { (label, preset) ->
+                                    FilterChip(
+                                        selected = abs(config.animationSpeed - preset) < 0.08f,
+                                        onClick = { onConfigChange(config.copy(animationSpeed = preset)) },
+                                        label = { Text(label) },
+                                        modifier = Modifier.testTag("app_icon_anim_speed_${label.lowercase()}")
+                                    )
+                                }
+                            }
+                            Slider(
+                                value = config.animationSpeed.coerceIn(0.5f, 2.0f),
+                                onValueChange = {
+                                    onConfigChange(config.copy(animationSpeed = it.coerceIn(0.5f, 2.0f)))
+                                },
+                                valueRange = 0.5f..2.0f,
+                                modifier = Modifier.testTag("app_icon_anim_speed_slider")
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 12.dp)
+                                ) {
+                                    Text("Pause When Video Pauses", style = MaterialTheme.typography.labelLarge)
+                                    Text(
+                                        "Rest the icon animation automatically when playback is paused",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = config.animateOnlyWhilePlaying,
+                                    onCheckedChange = {
+                                        onConfigChange(config.copy(animateOnlyWhilePlaying = it))
+                                    },
+                                    modifier = Modifier.testTag("app_icon_anim_only_playing_switch")
+                                )
                             }
                         }
                     }

@@ -368,6 +368,22 @@ class ExampleRobolectricTest {
             composeRule.onAllNodes(hasTestTag("always_on_app_icon_label"), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        composeRule.onNodeWithTag("app_icon_animation_summary", useUnmergedTree = true)
+            .performScrollTo()
+            .assertTextEquals("Off")
+        composeRule.onNodeWithTag("app_icon_anim_pulse")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitUntil(timeoutMillis = 3_000L) {
+            runCatching {
+                composeRule.onNodeWithTag("app_icon_animation_summary", useUnmergedTree = true)
+                    .assertTextEquals("Pulse")
+                true
+            }.getOrDefault(false)
+        }
+        composeRule.onNodeWithTag("app_icon_anim_speed_slider").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("app_icon_anim_only_playing_switch").performScrollTo().assertIsDisplayed()
 
         // Subtitles sub-tab is also accessible inside Display folder
         composeRule.onNodeWithTag("settings_detail_list").performScrollToIndex(0)
@@ -379,8 +395,8 @@ class ExampleRobolectricTest {
 
     @Test
     fun `settings tab hides search and shows updated about and updates links and Made in India`() {
-        assertEquals(49, BuildConfig.VERSION_CODE)
-        assertEquals("1.47 Beta", BuildConfig.VERSION_NAME)
+        assertEquals(50, BuildConfig.VERSION_CODE)
+        assertEquals("1.48 Beta", BuildConfig.VERSION_NAME)
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("nav_settings").performClick()
@@ -403,7 +419,7 @@ class ExampleRobolectricTest {
             .performScrollToNode(hasTestTag("about_whats_new_card"))
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("about_whats_new_card").assertIsDisplayed()
-        composeRule.onNode(hasText("What's New – v1.47 Beta"), useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNode(hasText("What's New – v1.48 Beta"), useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithTag("settings_detail_list")
             .performScrollToNode(hasTestTag("about_direct_download_card"))

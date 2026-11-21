@@ -1194,6 +1194,7 @@ fun PlayerScreen(
                         AlwaysOnAppIconOverlay(
                             config = appIconOverlayConfig,
                             availableWidth = screenWidthDp,
+                            isPlaying = isPlaying,
                             modifier = Modifier.align(topIconAlignment)
                         )
                     }
@@ -1236,6 +1237,7 @@ fun PlayerScreen(
                         AlwaysOnAppIconOverlay(
                             config = appIconOverlayConfig,
                             availableWidth = screenWidthDp,
+                            isPlaying = isPlaying,
                             modifier = Modifier.align(bottomIconAlignment)
                         )
                     }
@@ -1254,6 +1256,7 @@ fun PlayerScreen(
                         AlwaysOnAppIconOverlay(
                             config = appIconOverlayConfig,
                             availableWidth = screenWidthDp,
+                            isPlaying = isPlaying,
                             modifier = Modifier.align(resolveAppIconOverlayAlignment(appIconOverlayConfig))
                         )
                     }
