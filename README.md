@@ -70,7 +70,7 @@ A modern, dark-themed Android video player built with Jetpack Compose and Androi
 
 ## Installation
 
-1. Download `FAZA-Player-v1.48-Beta.apk` from the [Releases](https://github.com/GOOININDIA/FAZA-Player/releases) page.
+1. Download `FAZA-Player-v1.48-Beta.apk` from the [Releases](https://github.com/GOOININDIA/FAZA-Player-/tags) page.
 2. Open the downloaded `.apk` file on your Android device (Android 7.0 or higher).
 3. If prompted, allow **Install from unknown sources** for your browser or file manager.
 4. Launch **FAZA Player** and grant **All File Access** permission to load your local video library.
