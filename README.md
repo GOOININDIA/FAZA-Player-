@@ -26,7 +26,7 @@ A modern, dark-themed Android video player built with Jetpack Compose and Androi
 
 ### AI Assistant & Updates
 - **Integrated AI Assistant**: Built-in chat assistant powered by Firebase AI with library context awareness, starter prompts, and persistent chat history.
-- **In-App Update Checker**: Automatically checks for new builds via [GitHub Releases](https://github.com/GOOININDIA/FAZA-Player/releases) and the update manifest endpoint.
+- **In-App Update Checker**: Automatically checks for new builds via [GitHub Releases]([(https://github.com/GOOININDIA/FAZA-Player-/tags]) and the update manifest endpoint.
 
 ---
 
