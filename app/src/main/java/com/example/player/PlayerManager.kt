@@ -469,8 +469,8 @@ class PlayerManager(private val appContext: Context) {
                     for (i in 0 until group.length) {
                         val format = group.getTrackFormat(i)
                         val lang = format.language?.uppercase() ?: "UND"
-                        val channels = if (format.channelCount > 0) "${format.channelCount}ch" else ""
-                        val codec = format.sampleMimeType?.substringAfter('/')?.uppercase() ?: "AUDIO"
+                        val channels = formatAudioChannelLayout(format.channelCount)
+                        val codec = formatAudioCodecLabel(format.sampleMimeType)
                         val title = listOfNotNull(
                             format.label?.takeIf { it.isNotBlank() } ?: lang,
                             channels.takeIf { it.isNotBlank() },
@@ -593,3 +593,36 @@ internal fun calculateResumeStartPositionMs(
     if (durationMs > 3_000L && resumePositionMs >= durationMs - 2_500L) return 0L
     return resumePositionMs
 }
+
+internal fun formatAudioCodecLabel(mimeType: String?): String {
+    val normalized = mimeType?.trim()?.lowercase().orEmpty()
+    return when (normalized) {
+        MimeTypes.AUDIO_AC3 -> "AC3"
+        MimeTypes.AUDIO_E_AC3 -> "E-AC3"
+        MimeTypes.AUDIO_E_AC3_JOC -> "E-AC3 Atmos"
+        MimeTypes.AUDIO_TRUEHD -> "TrueHD"
+        MimeTypes.AUDIO_DTS -> "DTS"
+        MimeTypes.AUDIO_DTS_HD -> "DTS-HD"
+        MimeTypes.AUDIO_DTS_EXPRESS -> "DTS Express"
+        MimeTypes.AUDIO_AAC -> "AAC"
+        MimeTypes.AUDIO_MPEG -> "MP3"
+        MimeTypes.AUDIO_OPUS -> "Opus"
+        MimeTypes.AUDIO_FLAC -> "FLAC"
+        MimeTypes.AUDIO_VORBIS -> "Vorbis"
+        MimeTypes.AUDIO_ALAC -> "ALAC"
+        "" -> "AUDIO"
+        else -> normalized.substringAfter('/').uppercase()
+    }
+}
+
+internal fun formatAudioChannelLayout(channelCount: Int): String {
+    return when {
+        channelCount <= 0 -> ""
+        channelCount == 1 -> "Mono"
+        channelCount == 2 -> "Stereo"
+        channelCount == 6 -> "5.1"
+        channelCount == 8 -> "7.1"
+        else -> "${channelCount}ch"
+    }
+}
+

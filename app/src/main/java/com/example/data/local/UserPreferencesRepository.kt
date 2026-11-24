@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.data.model.AppColorSource
 import com.example.data.model.AppCustomColorPreset
+import com.example.data.model.AppIconLanguageLayout
 import com.example.data.model.AppIconOverlayAnimation
 import com.example.data.model.AppIconOverlayConfig
 import com.example.data.model.AppIconOverlayPosition
@@ -96,6 +97,8 @@ class UserPreferencesRepository(private val context: Context) {
         val AI_ANIMATION = stringPreferencesKey("app_icon_overlay_animation")
         val AI_ANIMATION_SPEED = floatPreferencesKey("app_icon_overlay_animation_speed")
         val AI_ANIMATE_ONLY_PLAYING = booleanPreferencesKey("app_icon_overlay_animate_only_playing")
+        val AI_SHOW_VIDEO_LANGUAGE = booleanPreferencesKey("app_icon_overlay_show_video_language")
+        val AI_LANGUAGE_LAYOUT = stringPreferencesKey("app_icon_overlay_language_layout")
 
         val PUI_THEME_STYLE = stringPreferencesKey("pui_theme_style")
         val PUI_ACCENT = stringPreferencesKey("pui_accent")
@@ -192,6 +195,10 @@ class UserPreferencesRepository(private val context: Context) {
             AppIconOverlayAnimation.entries.find { it.name == name }
         } ?: AppIconOverlayAnimation.NONE
 
+        val aiLanguageLayout = prefs[Keys.AI_LANGUAGE_LAYOUT]?.let { name ->
+            AppIconLanguageLayout.entries.find { it.name == name }
+        } ?: AppIconLanguageLayout.ONE_LINE
+
         val puiThemeStyle = prefs[Keys.PUI_THEME_STYLE]?.let { name ->
             PlayerUiThemeStyle.entries.find { it.name == name }
         } ?: PlayerUiThemeStyle.FAZA_CLASSIC
@@ -279,7 +286,9 @@ class UserPreferencesRepository(private val context: Context) {
                 customYFraction = (prefs[Keys.AI_CUSTOM_Y] ?: 0.12f).coerceIn(0f, 1f),
                 animation = aiAnimation,
                 animationSpeed = (prefs[Keys.AI_ANIMATION_SPEED] ?: 1.0f).coerceIn(0.5f, 2.0f),
-                animateOnlyWhilePlaying = prefs[Keys.AI_ANIMATE_ONLY_PLAYING] ?: true
+                animateOnlyWhilePlaying = prefs[Keys.AI_ANIMATE_ONLY_PLAYING] ?: true,
+                showVideoLanguage = prefs[Keys.AI_SHOW_VIDEO_LANGUAGE] ?: false,
+                languageLayout = aiLanguageLayout
             ),
             playerUiConfig = PlayerUiConfig(
                 themeStyle = puiThemeStyle,
@@ -425,6 +434,8 @@ class UserPreferencesRepository(private val context: Context) {
             it[Keys.AI_ANIMATION] = config.animation.name
             it[Keys.AI_ANIMATION_SPEED] = config.animationSpeed.coerceIn(0.5f, 2.0f)
             it[Keys.AI_ANIMATE_ONLY_PLAYING] = config.animateOnlyWhilePlaying
+            it[Keys.AI_SHOW_VIDEO_LANGUAGE] = config.showVideoLanguage
+            it[Keys.AI_LANGUAGE_LAYOUT] = config.languageLayout.name
         }
     }
 

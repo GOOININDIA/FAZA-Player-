@@ -115,30 +115,25 @@ fun CachedVideoThumbnail(
 fun ResolutionBadge(tier: ResolutionTier, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val isUltra = tier == ResolutionTier.UHD_4K || tier == ResolutionTier.UHD_8K
-    val isHd = tier == ResolutionTier.FHD_1080P
 
-    val containerColor = when {
-        isUltra -> colors.primaryContainer
-        isHd -> colors.tertiaryContainer
-        else -> colors.surfaceContainerHighest
+    val containerColor = if (isUltra) {
+        colors.primary.copy(alpha = 0.12f)
+    } else {
+        colors.surfaceContainerHigh
     }
-    val textColor = when {
-        isUltra -> colors.onPrimaryContainer
-        isHd -> colors.onTertiaryContainer
-        else -> colors.onSurfaceVariant
-    }
+    val textColor = if (isUltra) colors.primary else colors.onSurfaceVariant
 
     Surface(
         color = containerColor,
-        shape = CircleShape,
+        shape = RoundedCornerShape(6.dp),
         modifier = modifier
     ) {
         Text(
             text = tier.badge,
             color = textColor,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
 }
@@ -175,7 +170,7 @@ fun VideoListCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("video_card_${video.id}"),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(16.dp),
         onClick = onPlayClick
     ) {
         Row(
@@ -188,7 +183,7 @@ fun VideoListCard(
                 modifier = Modifier
                     .width(thumbWidth)
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(colors.surfaceContainerHigh)
             ) {
                 CachedVideoThumbnail(
@@ -203,38 +198,20 @@ fun VideoListCard(
                         .background(ThumbVignetteBrush)
                 )
 
-                // Material You circular tonal play orb
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(colors.primaryContainer.copy(alpha = 0.92f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = colors.onPrimaryContainer,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-
                 if (durationLabel.isNotEmpty()) {
                     Surface(
-                        color = colors.inverseSurface.copy(alpha = 0.88f),
-                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(6.dp),
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(6.dp)
+                            .padding(5.dp)
                     ) {
                         Text(
                             text = durationLabel,
-                            color = colors.inverseOnSurface,
+                            color = Color.White,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                         )
                     }
                 }
@@ -243,11 +220,11 @@ fun VideoListCard(
                     LinearProgressIndicator(
                         progress = { video.progressFraction },
                         color = colors.primary,
-                        trackColor = colors.surfaceContainerHighest.copy(alpha = 0.55f),
+                        trackColor = Color.White.copy(alpha = 0.25f),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .height(3.dp)
+                            .height(2.5.dp)
                     )
                 }
             }
@@ -256,12 +233,12 @@ fun VideoListCard(
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Text(
                     text = video.title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     color = colors.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -373,17 +350,15 @@ fun RecentVideoChipCard(
 
     FazaGlassCard(
         modifier = modifier
-            .width(188.dp)
+            .width(184.dp)
             .testTag("recent_card_${video.id}"),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(16.dp),
         onClick = onClick
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = 8.dp, top = 8.dp)
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(16.dp))
                 .background(colors.surfaceContainerHigh)
         ) {
             CachedVideoThumbnail(
@@ -398,8 +373,8 @@ fun RecentVideoChipCard(
             )
             if (durationLabel.isNotEmpty()) {
                 Surface(
-                    color = colors.inverseSurface.copy(alpha = 0.88f),
-                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.72f),
+                    shape = RoundedCornerShape(6.dp),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
@@ -407,9 +382,9 @@ fun RecentVideoChipCard(
                     Text(
                         text = durationLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = colors.inverseOnSurface,
+                        color = Color.White,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -417,22 +392,22 @@ fun RecentVideoChipCard(
                 LinearProgressIndicator(
                     progress = { video.progressFraction },
                     color = colors.primary,
-                    trackColor = colors.surfaceContainerHighest.copy(alpha = 0.55f),
+                    trackColor = Color.White.copy(alpha = 0.25f),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(3.dp)
+                        .height(2.5.dp)
                 )
             }
         }
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = video.title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 color = colors.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -440,8 +415,7 @@ fun RecentVideoChipCard(
             Text(
                 text = "${video.resolutionTier.badge} · ${video.formatTag}",
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.primary,
-                fontWeight = FontWeight.Medium,
+                color = colors.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

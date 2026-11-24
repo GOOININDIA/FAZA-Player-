@@ -91,7 +91,9 @@ class ExampleRobolectricTest {
         composeRule.waitForIdle()
 
         // Navigate into 2nd folder: Theme (Appearance)
-        composeRule.onNodeWithTag("settings_folder_appearance").performClick()
+        composeRule.onNodeWithTag("settings_folder_appearance")
+            .assertIsDisplayed()
+            .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.waitForIdle()
 
         // Scroll Application Colour card to top of viewport cleanly above FloatingNavigationDock
@@ -178,7 +180,9 @@ class ExampleRobolectricTest {
         composeRule.onNodeWithTag("settings_folder_list")
             .performScrollToNode(hasTestTag("settings_folder_advanced"))
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("settings_folder_advanced").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("settings_folder_advanced")
+            .assertIsDisplayed()
+            .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("advanced_hardware_acceleration_switch")
@@ -371,19 +375,46 @@ class ExampleRobolectricTest {
         composeRule.onNodeWithTag("app_icon_animation_summary", useUnmergedTree = true)
             .performScrollTo()
             .assertTextEquals("Off")
-        composeRule.onNodeWithTag("app_icon_anim_pulse")
+        // Verify legacy motion animations are completely removed
+        composeRule.onNodeWithTag("app_icon_anim_pulse").assertDoesNotExist()
+        composeRule.onNodeWithTag("app_icon_anim_float").assertDoesNotExist()
+        composeRule.onNodeWithTag("app_icon_anim_spin").assertDoesNotExist()
+        composeRule.onNodeWithTag("app_icon_anim_swing").assertDoesNotExist()
+        composeRule.onNodeWithTag("app_icon_anim_gemini_glow")
             .performScrollTo()
             .assertIsDisplayed()
             .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.waitUntil(timeoutMillis = 3_000L) {
             runCatching {
                 composeRule.onNodeWithTag("app_icon_animation_summary", useUnmergedTree = true)
-                    .assertTextEquals("Pulse")
+                    .assertTextEquals("Gemini Glow")
                 true
             }.getOrDefault(false)
         }
         composeRule.onNodeWithTag("app_icon_anim_speed_slider").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("app_icon_anim_only_playing_switch").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("app_icon_language_switch")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitUntil(timeoutMillis = 3_000L) {
+            composeRule.onAllNodes(hasTestTag("always_on_app_icon_language"), useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("app_icon_lang_layout_summary", useUnmergedTree = true)
+            .performScrollTo()
+            .assertTextEquals("One Line")
+        composeRule.onNodeWithTag("app_icon_lang_layout_two_lines")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitUntil(timeoutMillis = 3_000L) {
+            runCatching {
+                composeRule.onNodeWithTag("app_icon_lang_layout_summary", useUnmergedTree = true)
+                    .assertTextEquals("Two Lines")
+                true
+            }.getOrDefault(false)
+        }
 
         // Subtitles sub-tab is also accessible inside Display folder
         composeRule.onNodeWithTag("settings_detail_list").performScrollToIndex(0)
@@ -395,8 +426,8 @@ class ExampleRobolectricTest {
 
     @Test
     fun `settings tab hides search and shows updated about and updates links and Made in India`() {
-        assertEquals(50, BuildConfig.VERSION_CODE)
-        assertEquals("1.48 Beta", BuildConfig.VERSION_NAME)
+        assertEquals(53, BuildConfig.VERSION_CODE)
+        assertEquals("1.51 Beta", BuildConfig.VERSION_NAME)
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("nav_settings").performClick()
@@ -419,7 +450,7 @@ class ExampleRobolectricTest {
             .performScrollToNode(hasTestTag("about_whats_new_card"))
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("about_whats_new_card").assertIsDisplayed()
-        composeRule.onNode(hasText("What's New – v1.48 Beta"), useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNode(hasText("What's New – v1.51 Beta"), useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithTag("settings_detail_list")
             .performScrollToNode(hasTestTag("about_direct_download_card"))

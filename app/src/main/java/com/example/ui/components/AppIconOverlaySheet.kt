@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -46,37 +47,50 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.model.AppIconLanguageLayout
 import com.example.data.model.AppIconOverlayAnimation
 import com.example.data.model.AppIconOverlayConfig
 import com.example.data.model.AppIconOverlayPosition
 import com.example.data.model.AppIconOverlayStyle
 import com.example.data.model.AppIconOverlayTheme
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 fun resolveAppIconAnimationDurationMs(baseDurationMs: Int, speedMultiplier: Float): Int {
     val safeSpeed = speedMultiplier.coerceIn(0.5f, 2.0f)
@@ -107,7 +121,8 @@ fun AlwaysOnAppIconOverlay(
     config: AppIconOverlayConfig,
     availableWidth: Dp,
     modifier: Modifier = Modifier,
-    isPlaying: Boolean = true
+    isPlaying: Boolean = true,
+    videoLanguageLabel: String? = null
 ) {
     if (!config.enabled) return
 
@@ -121,104 +136,48 @@ fun AlwaysOnAppIconOverlay(
     val safeOpacity = config.opacity.coerceIn(0.20f, 1.0f)
     val iconDp = (baseIconDp * safeScale).dp
     val labelSp = (baseIconDp * 0.44f * safeScale.coerceAtMost(1.35f)).sp
+    val langSp = (baseIconDp * 0.40f * safeScale.coerceAtMost(1.35f)).sp
+    val activeLanguageLabel = if (config.showVideoLanguage) {
+        videoLanguageLabel?.trim()?.takeIf { it.isNotEmpty() }
+    } else {
+        null
+    }
+    val isTwoLines = config.languageLayout == AppIconLanguageLayout.TWO_LINES
 
-    val shouldAnimate = config.animation != AppIconOverlayAnimation.NONE &&
+    val shouldAnimateGemini = config.animation == AppIconOverlayAnimation.GEMINI_GLOW &&
         (!config.animateOnlyWhilePlaying || isPlaying)
-    val density = LocalDensity.current
-    val floatOffsetPx = with(density) { 4.dp.toPx() }
 
-    var animScale = 1f
-    var animTranslationYPx = 0f
-    var animContainerRotation = 0f
-    var animEmblemRotation = 0f
-    var animAlphaMultiplier = 1f
+    // Lightweight GPU-friendly Gemini animation: created ONLY when enabled & playing,
+    // and sampled purely in drawWithContent to avoid per-frame recompositions.
+    var geminiColorPhaseState: State<Float>? = null
+    var geminiShimmerPhaseState: State<Float>? = null
 
-    if (shouldAnimate) {
-        val infiniteTransition = rememberInfiniteTransition(label = "app_icon_overlay_anim")
-        when (config.animation) {
-            AppIconOverlayAnimation.PULSE -> {
-                val pulseScale by infiniteTransition.animateFloat(
-                    initialValue = 0.93f,
-                    targetValue = 1.07f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(
-                            durationMillis = resolveAppIconAnimationDurationMs(1400, config.animationSpeed),
-                            easing = FastOutSlowInEasing
-                        ),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "app_icon_pulse"
-                )
-                animScale = pulseScale
-            }
-
-            AppIconOverlayAnimation.FLOAT -> {
-                val floatY by infiniteTransition.animateFloat(
-                    initialValue = -floatOffsetPx,
-                    targetValue = floatOffsetPx,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(
-                            durationMillis = resolveAppIconAnimationDurationMs(1800, config.animationSpeed),
-                            easing = FastOutSlowInEasing
-                        ),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "app_icon_float"
-                )
-                animTranslationYPx = floatY
-            }
-
-            AppIconOverlayAnimation.SPIN -> {
-                val spinAngle by infiniteTransition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 360f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(
-                            durationMillis = resolveAppIconAnimationDurationMs(5200, config.animationSpeed),
-                            easing = LinearEasing
-                        ),
-                        repeatMode = RepeatMode.Restart
-                    ),
-                    label = "app_icon_spin"
-                )
-                animEmblemRotation = spinAngle
-            }
-
-            AppIconOverlayAnimation.SHIMMER -> {
-                val shimmerProgress by infiniteTransition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(
-                            durationMillis = resolveAppIconAnimationDurationMs(1600, config.animationSpeed),
-                            easing = FastOutSlowInEasing
-                        ),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "app_icon_shimmer"
-                )
-                animAlphaMultiplier = 0.62f + (0.38f * shimmerProgress)
-                animScale = 0.97f + (0.05f * shimmerProgress)
-            }
-
-            AppIconOverlayAnimation.SWING -> {
-                val swingAngle by infiniteTransition.animateFloat(
-                    initialValue = -8f,
-                    targetValue = 8f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(
-                            durationMillis = resolveAppIconAnimationDurationMs(1500, config.animationSpeed),
-                            easing = FastOutSlowInEasing
-                        ),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "app_icon_swing"
-                )
-                animContainerRotation = swingAngle
-            }
-
-            AppIconOverlayAnimation.NONE -> Unit
-        }
+    if (shouldAnimateGemini) {
+        val infiniteTransition = rememberInfiniteTransition(label = "app_icon_gemini_anim")
+        geminiColorPhaseState = infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = resolveAppIconAnimationDurationMs(4400, config.animationSpeed),
+                    easing = LinearEasing
+                ),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "app_icon_gemini_color_phase"
+        )
+        geminiShimmerPhaseState = infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = resolveAppIconAnimationDurationMs(3400, config.animationSpeed),
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "app_icon_gemini_shimmer_phase"
+        )
     }
 
     val palette = when (config.theme) {
@@ -246,8 +205,16 @@ fun AlwaysOnAppIconOverlay(
 
     val shape = when (config.style) {
         AppIconOverlayStyle.ROUNDED_BADGE -> RoundedCornerShape((10f * safeScale.coerceAtMost(1.3f)).dp)
-        AppIconOverlayStyle.CIRCLE_BADGE -> CircleShape
-        AppIconOverlayStyle.PILL_BRAND -> RoundedCornerShape(999.dp)
+        AppIconOverlayStyle.CIRCLE_BADGE -> if (activeLanguageLabel != null) {
+            if (isTwoLines) RoundedCornerShape((12f * safeScale.coerceAtMost(1.3f)).dp) else RoundedCornerShape(999.dp)
+        } else {
+            CircleShape
+        }
+        AppIconOverlayStyle.PILL_BRAND -> if (activeLanguageLabel != null && isTwoLines) {
+            RoundedCornerShape((14f * safeScale.coerceAtMost(1.3f)).dp)
+        } else {
+            RoundedCornerShape(999.dp)
+        }
         AppIconOverlayStyle.ICON_ONLY -> RoundedCornerShape(8.dp)
     }
 
@@ -267,30 +234,80 @@ fun AlwaysOnAppIconOverlay(
     } else {
         null
     }
+    val languageTextStyle = TextStyle(
+        color = palette.fg.copy(alpha = 0.92f),
+        fontSize = langSp,
+        fontWeight = FontWeight.SemiBold,
+        shadow = textShadow
+    )
+    val accessibilityDescription = if (activeLanguageLabel != null) {
+        "FAZA Player app icon, audio language $activeLanguageLabel"
+    } else {
+        "FAZA Player app icon"
+    }
 
     Box(
         modifier = modifier
             .graphicsLayer {
-                scaleX = animScale
-                scaleY = animScale
-                translationY = animTranslationYPx
-                rotationZ = animContainerRotation
-                alpha = (safeOpacity * animAlphaMultiplier).coerceIn(0.15f, 1.0f)
+                alpha = safeOpacity
             }
             .semantics(mergeDescendants = true) {
-                contentDescription = "FAZA Player app icon"
+                contentDescription = accessibilityDescription
             }
             .testTag("always_on_app_icon")
     ) {
         if (config.style == AppIconOverlayStyle.ICON_ONLY) {
-            Image(
-                painter = painterResource(id = R.drawable.faza_icon_fg),
-                contentDescription = null,
-                modifier = Modifier
-                    .size((iconDp.value * 1.2f).dp)
-                    .graphicsLayer { rotationZ = animEmblemRotation }
-                    .clip(RoundedCornerShape(8.dp))
-            )
+            val iconOnlySize = (iconDp.value * 1.2f).dp
+            val iconOnlyClip = RoundedCornerShape(8.dp)
+            if (activeLanguageLabel == null) {
+                GeminiAnimatedAppIconEmblem(
+                    size = iconOnlySize,
+                    clipShape = iconOnlyClip,
+                    animateGemini = shouldAnimateGemini,
+                    colorPhaseState = geminiColorPhaseState,
+                    shimmerPhaseState = geminiShimmerPhaseState
+                )
+            } else if (isTwoLines) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    GeminiAnimatedAppIconEmblem(
+                        size = iconOnlySize,
+                        clipShape = iconOnlyClip,
+                        animateGemini = shouldAnimateGemini,
+                        colorPhaseState = geminiColorPhaseState,
+                        shimmerPhaseState = geminiShimmerPhaseState
+                    )
+                    Text(
+                        text = activeLanguageLabel,
+                        style = languageTextStyle.copy(color = Color.White),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("always_on_app_icon_language")
+                    )
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy((6f * safeScale.coerceAtMost(1.2f)).dp)
+                ) {
+                    GeminiAnimatedAppIconEmblem(
+                        size = iconOnlySize,
+                        clipShape = iconOnlyClip,
+                        animateGemini = shouldAnimateGemini,
+                        colorPhaseState = geminiColorPhaseState,
+                        shimmerPhaseState = geminiShimmerPhaseState
+                    )
+                    Text(
+                        text = activeLanguageLabel,
+                        style = languageTextStyle.copy(color = Color.White),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("always_on_app_icon_language")
+                    )
+                }
+            }
         } else {
             Surface(
                 color = effectiveBg,
@@ -306,51 +323,138 @@ fun AlwaysOnAppIconOverlay(
                             ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.faza_icon_fg),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size((iconDp.value * 0.88f).dp)
-                                    .graphicsLayer { rotationZ = animEmblemRotation }
-                                    .clip(RoundedCornerShape(6.dp))
+                            GeminiAnimatedAppIconEmblem(
+                                size = (iconDp.value * 0.88f).dp,
+                                clipShape = RoundedCornerShape(6.dp),
+                                animateGemini = shouldAnimateGemini,
+                                colorPhaseState = geminiColorPhaseState,
+                                shimmerPhaseState = geminiShimmerPhaseState
                             )
                             Spacer(modifier = Modifier.width((6f * safeScale.coerceAtMost(1.2f)).dp))
-                            Text(
-                                text = "FAZA",
-                                style = TextStyle(
-                                    color = palette.fg,
-                                    fontSize = labelSp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.6.sp,
-                                    shadow = textShadow
-                                ),
-                                maxLines = 1,
-                                modifier = Modifier.testTag("always_on_app_icon_label")
-                            )
+                            if (activeLanguageLabel != null && isTwoLines) {
+                                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Text(
+                                        text = "FAZA",
+                                        style = TextStyle(
+                                            color = palette.fg,
+                                            fontSize = labelSp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 0.6.sp,
+                                            shadow = textShadow
+                                        ),
+                                        maxLines = 1,
+                                        modifier = Modifier.testTag("always_on_app_icon_label")
+                                    )
+                                    Text(
+                                        text = activeLanguageLabel,
+                                        style = languageTextStyle,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.testTag("always_on_app_icon_language")
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "FAZA",
+                                    style = TextStyle(
+                                        color = palette.fg,
+                                        fontSize = labelSp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.6.sp,
+                                        shadow = textShadow
+                                    ),
+                                    maxLines = 1,
+                                    modifier = Modifier.testTag("always_on_app_icon_label")
+                                )
+                                if (activeLanguageLabel != null) {
+                                    Text(
+                                        text = " · ",
+                                        style = languageTextStyle.copy(color = palette.fg.copy(alpha = 0.6f)),
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = activeLanguageLabel,
+                                        style = languageTextStyle,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.testTag("always_on_app_icon_language")
+                                    )
+                                }
+                            }
                         }
                     }
 
                     AppIconOverlayStyle.CIRCLE_BADGE,
                     AppIconOverlayStyle.ROUNDED_BADGE -> {
                         val badgePadding = (6f * safeScale.coerceAtMost(1.25f)).dp
-                        Box(
-                            modifier = Modifier.padding(badgePadding),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.faza_icon_fg),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(iconDp)
-                                    .graphicsLayer { rotationZ = animEmblemRotation }
-                                    .clip(
-                                        if (config.style == AppIconOverlayStyle.CIRCLE_BADGE) {
-                                            CircleShape
-                                        } else {
-                                            RoundedCornerShape((6f * safeScale.coerceAtMost(1.25f)).dp)
-                                        }
-                                    )
-                            )
+                        val emblemClip = if (config.style == AppIconOverlayStyle.CIRCLE_BADGE) {
+                            CircleShape
+                        } else {
+                            RoundedCornerShape((6f * safeScale.coerceAtMost(1.25f)).dp)
+                        }
+                        if (activeLanguageLabel == null) {
+                            Box(
+                                modifier = Modifier.padding(badgePadding),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                GeminiAnimatedAppIconEmblem(
+                                    size = iconDp,
+                                    clipShape = emblemClip,
+                                    animateGemini = shouldAnimateGemini,
+                                    colorPhaseState = geminiColorPhaseState,
+                                    shimmerPhaseState = geminiShimmerPhaseState
+                                )
+                            }
+                        } else if (isTwoLines) {
+                            Column(
+                                modifier = Modifier.padding(
+                                    horizontal = (8f * safeScale.coerceAtMost(1.25f)).dp,
+                                    vertical = (5f * safeScale.coerceAtMost(1.2f)).dp
+                                ),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                GeminiAnimatedAppIconEmblem(
+                                    size = (iconDp.value * 0.92f).dp,
+                                    clipShape = emblemClip,
+                                    animateGemini = shouldAnimateGemini,
+                                    colorPhaseState = geminiColorPhaseState,
+                                    shimmerPhaseState = geminiShimmerPhaseState
+                                )
+                                Text(
+                                    text = activeLanguageLabel,
+                                    style = languageTextStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.testTag("always_on_app_icon_language")
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.padding(
+                                    start = (6f * safeScale.coerceAtMost(1.25f)).dp,
+                                    end = (9f * safeScale.coerceAtMost(1.25f)).dp,
+                                    top = (5f * safeScale.coerceAtMost(1.2f)).dp,
+                                    bottom = (5f * safeScale.coerceAtMost(1.2f)).dp
+                                ),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy((6f * safeScale.coerceAtMost(1.2f)).dp)
+                            ) {
+                                GeminiAnimatedAppIconEmblem(
+                                    size = (iconDp.value * 0.88f).dp,
+                                    clipShape = emblemClip,
+                                    animateGemini = shouldAnimateGemini,
+                                    colorPhaseState = geminiColorPhaseState,
+                                    shimmerPhaseState = geminiShimmerPhaseState
+                                )
+                                Text(
+                                    text = activeLanguageLabel,
+                                    style = languageTextStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.testTag("always_on_app_icon_language")
+                                )
+                            }
                         }
                     }
 
@@ -358,6 +462,116 @@ fun AlwaysOnAppIconOverlay(
                 }
             }
         }
+    }
+}
+
+private val GeminiGlowSpectrum = listOf(
+    Color(0xFF4285F4), // Gemini Blue
+    Color(0xFF6B7CFF), // Periwinkle Indigo
+    Color(0xFF9B72CB), // Gemini Violet
+    Color(0xFFD96570), // Soft Rose
+    Color(0xFF38BDF8)  // Luminous Cyan
+)
+
+internal fun sampleGeminiGlowSpectrum(phase: Float): Color {
+    val wrapped = ((phase % 1f) + 1f) % 1f
+    val count = GeminiGlowSpectrum.size
+    val scaled = wrapped * count
+    val index = scaled.toInt().coerceIn(0, count - 1)
+    val nextIndex = (index + 1) % count
+    val fraction = scaled - index
+    return lerp(GeminiGlowSpectrum[index], GeminiGlowSpectrum[nextIndex], fraction)
+}
+
+@Composable
+private fun GeminiAnimatedAppIconEmblem(
+    size: Dp,
+    clipShape: Shape,
+    animateGemini: Boolean,
+    colorPhaseState: State<Float>?,
+    shimmerPhaseState: State<Float>?,
+    modifier: Modifier = Modifier
+) {
+    val geminiModifier = if (animateGemini && colorPhaseState != null && shimmerPhaseState != null) {
+        Modifier.drawWithContent {
+            val colorPhase = colorPhaseState.value
+            val shimmerPhase = shimmerPhaseState.value
+            val primaryGlow = sampleGeminiGlowSpectrum(colorPhase)
+            val secondaryGlow = sampleGeminiGlowSpectrum(colorPhase + 0.34f)
+            // Restrained gentle breath [0.78, 1.0] — never bright, flashing, or distracting
+            val breath = 0.89f + (0.11f * sin(shimmerPhase * 2.0 * PI).toFloat())
+
+            // 1. Subtle soft ambient Gemini halo behind the static icon
+            val glowRadius = (this.size.maxDimension * 0.84f).coerceAtLeast(1f)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0.0f to primaryGlow.copy(alpha = 0.28f * breath),
+                        0.55f to secondaryGlow.copy(alpha = 0.14f * breath),
+                        1.0f to Color.Transparent
+                    ),
+                    center = center,
+                    radius = glowRadius
+                ),
+                radius = glowRadius,
+                center = center
+            )
+
+            // 2. Crisp static App Icon artwork (zero bounce, spin, or scale motion)
+            drawContent()
+
+            // 3. Soft diagonal gradient shimmer + fluid Gemini spectrum rim clipped cleanly to icon shape
+            val outline = clipShape.createOutline(this.size, layoutDirection, this)
+            val outlinePath = Path().apply { addOutline(outline) }
+            clipPath(outlinePath) {
+                val diag = this.size.width + this.size.height
+                val sweepPos = (-0.55f + shimmerPhase * 2.1f) * diag
+                val bandSpan = (diag * 0.40f).coerceAtLeast(1f)
+                val shimmerBrush = Brush.linearGradient(
+                    colorStops = arrayOf(
+                        0.0f to Color.Transparent,
+                        0.32f to primaryGlow.copy(alpha = 0.10f),
+                        0.50f to Color.White.copy(alpha = 0.22f),
+                        0.68f to secondaryGlow.copy(alpha = 0.12f),
+                        1.0f to Color.Transparent
+                    ),
+                    start = Offset(sweepPos - bandSpan, sweepPos - bandSpan),
+                    end = Offset(sweepPos + bandSpan, sweepPos + bandSpan)
+                )
+                drawRect(brush = shimmerBrush)
+
+                val rimColors = listOf(
+                    sampleGeminiGlowSpectrum(colorPhase).copy(alpha = 0.60f * breath),
+                    sampleGeminiGlowSpectrum(colorPhase + 0.20f).copy(alpha = 0.54f * breath),
+                    sampleGeminiGlowSpectrum(colorPhase + 0.40f).copy(alpha = 0.60f * breath),
+                    sampleGeminiGlowSpectrum(colorPhase + 0.60f).copy(alpha = 0.54f * breath),
+                    sampleGeminiGlowSpectrum(colorPhase + 0.80f).copy(alpha = 0.60f * breath),
+                    sampleGeminiGlowSpectrum(colorPhase).copy(alpha = 0.60f * breath)
+                )
+                drawPath(
+                    path = outlinePath,
+                    brush = Brush.sweepGradient(colors = rimColors, center = center),
+                    style = Stroke(width = 1.35.dp.toPx())
+                )
+            }
+        }
+    } else {
+        Modifier
+    }
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .then(geminiModifier),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.faza_icon_fg),
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(clipShape)
+        )
     }
 }
 
@@ -386,6 +600,9 @@ fun AppIconOverlayStyleEditor(
         "85%" to 0.85f,
         "100%" to 1.0f
     )
+
+    val previewLanguageSamples = listOf("हिंदी", "English", "বাংলা")
+    var previewLanguageSample by remember { mutableStateOf(previewLanguageSamples.first()) }
 
     val currentConfig by rememberUpdatedState(config)
     val currentOnConfigChange by rememberUpdatedState(onConfigChange)
@@ -464,6 +681,7 @@ fun AppIconOverlayStyleEditor(
                     AlwaysOnAppIconOverlay(
                         config = config,
                         availableWidth = previewWidth,
+                        videoLanguageLabel = previewLanguageSample,
                         modifier = Modifier.align(resolveAppIconOverlayAlignment(config))
                     )
                 }
@@ -681,7 +899,7 @@ fun AppIconOverlayStyleEditor(
                     )
                 }
                 Text(
-                    text = "Keep the icon static (Off) or enable a subtle motion effect during playback.",
+                    text = "Keep the icon static (Off) or enable a subtle Gemini-style glow and gradient shimmer.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -772,6 +990,108 @@ fun AppIconOverlayStyleEditor(
                                     },
                                     modifier = Modifier.testTag("app_icon_anim_only_playing_switch")
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Optional Video Language Display (One Line / Two Lines)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Translate,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text("Show Video Language (Optional)", style = MaterialTheme.typography.titleSmall)
+                        }
+                        Text(
+                            "Show the active video language with the app icon (e.g. हिंदी, English, বাংলা)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = config.showVideoLanguage,
+                        onCheckedChange = { onConfigChange(config.copy(showVideoLanguage = it)) },
+                        modifier = Modifier.testTag("app_icon_language_switch")
+                    )
+                }
+
+                AnimatedVisibility(visible = config.showVideoLanguage) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp)
+                            .testTag("app_icon_language_controls")
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Language Layout", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    text = config.languageLayout.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.testTag("app_icon_lang_layout_summary")
+                                )
+                            }
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                AppIconLanguageLayout.entries.forEach { layout ->
+                                    FilterChip(
+                                        selected = config.languageLayout == layout,
+                                        onClick = { onConfigChange(config.copy(languageLayout = layout)) },
+                                        label = { Text(layout.label) },
+                                        modifier = Modifier.testTag("app_icon_lang_layout_${layout.name.lowercase()}")
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Preview Language",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                previewLanguageSamples.forEach { sample ->
+                                    FilterChip(
+                                        selected = previewLanguageSample == sample,
+                                        onClick = { previewLanguageSample = sample },
+                                        label = { Text(sample) },
+                                        modifier = Modifier.testTag("app_icon_lang_preview_$sample")
+                                    )
+                                }
                             }
                         }
                     }

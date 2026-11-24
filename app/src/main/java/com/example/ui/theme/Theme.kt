@@ -196,20 +196,20 @@ fun buildCustomAppColorScheme(seedColorHex: Long, isDark: Boolean): ColorScheme 
             onTertiary = bestContrastOnColor(tertiary, hslComposeColor(tertiaryHue, s, 0.10f), Color.White),
             tertiaryContainer = tertiaryContainer,
             onTertiaryContainer = hslComposeColor(tertiaryHue, (s * 0.80f), 0.92f),
-            // True AMOLED pure black background with layered tinted obsidian glass surfaces
+            // Clean minimalist dark canvas with subtle neutral-tinted surface steps
             background = FazaAmoledBlack,
             onBackground = FazaTextDarkPrimary,
-            surface = hslComposeColor(h, (s * 0.22f), 0.035f),
+            surface = FazaAmoledSurface,
             onSurface = FazaTextDarkPrimary,
-            surfaceVariant = hslComposeColor(h, (s * 0.20f), 0.14f),
-            onSurfaceVariant = hslComposeColor(h, (s * 0.16f), 0.72f),
+            surfaceVariant = hslComposeColor(h, (s * 0.08f), 0.12f),
+            onSurfaceVariant = FazaTextDarkSecondary,
             surfaceContainerLowest = FazaAmoledSurfaceLowest,
-            surfaceContainerLow = hslComposeColor(h, (s * 0.24f), 0.07f),
-            surfaceContainer = hslComposeColor(h, (s * 0.24f), 0.105f),
-            surfaceContainerHigh = hslComposeColor(h, (s * 0.24f), 0.145f),
-            surfaceContainerHighest = hslComposeColor(h, (s * 0.24f), 0.19f),
-            outline = hslComposeColor(h, (s * 0.18f), 0.42f),
-            outlineVariant = hslComposeColor(h, (s * 0.22f), 0.20f),
+            surfaceContainerLow = hslComposeColor(h, (s * 0.08f), 0.07f),
+            surfaceContainer = hslComposeColor(h, (s * 0.09f), 0.095f),
+            surfaceContainerHigh = hslComposeColor(h, (s * 0.10f), 0.13f),
+            surfaceContainerHighest = hslComposeColor(h, (s * 0.10f), 0.17f),
+            outline = hslComposeColor(h, (s * 0.08f), 0.30f),
+            outlineVariant = hslComposeColor(h, (s * 0.08f), 0.17f),
             error = FazaDarkError,
             onError = FazaOnDarkError
         )
@@ -236,19 +236,19 @@ fun buildCustomAppColorScheme(seedColorHex: Long, isDark: Boolean): ColorScheme 
             onTertiary = bestContrastOnColor(tertiary, hslComposeColor(tertiaryHue, s, 0.12f), Color.White),
             tertiaryContainer = tertiaryContainer,
             onTertiaryContainer = hslComposeColor(tertiaryHue, s, 0.16f),
-            background = hslComposeColor(h, (s * 0.22f), 0.975f),
+            background = FazaLightBg,
             onBackground = FazaTextLightPrimary,
-            surface = hslComposeColor(h, (s * 0.22f), 0.975f),
+            surface = FazaLightSurface,
             onSurface = FazaTextLightPrimary,
-            surfaceVariant = hslComposeColor(h, (s * 0.18f), 0.91f),
+            surfaceVariant = hslComposeColor(h, (s * 0.06f), 0.93f),
             onSurfaceVariant = FazaTextLightSecondary,
             surfaceContainerLowest = Color(0xFFFFFFFF),
             surfaceContainerLow = Color(0xFFFFFFFF),
-            surfaceContainer = hslComposeColor(h, (s * 0.24f), 0.95f),
-            surfaceContainerHigh = hslComposeColor(h, (s * 0.24f), 0.92f),
-            surfaceContainerHighest = hslComposeColor(h, (s * 0.25f), 0.88f),
-            outline = hslComposeColor(h, (s * 0.16f), 0.50f),
-            outlineVariant = hslComposeColor(h, (s * 0.22f), 0.84f),
+            surfaceContainer = hslComposeColor(h, (s * 0.06f), 0.96f),
+            surfaceContainerHigh = hslComposeColor(h, (s * 0.07f), 0.93f),
+            surfaceContainerHighest = hslComposeColor(h, (s * 0.07f), 0.89f),
+            outline = hslComposeColor(h, (s * 0.08f), 0.50f),
+            outlineVariant = hslComposeColor(h, (s * 0.08f), 0.88f),
             error = Color(0xFFDC2626),
             onError = Color.White
         )
@@ -256,11 +256,11 @@ fun buildCustomAppColorScheme(seedColorHex: Long, isDark: Boolean): ColorScheme 
 }
 
 val FazaShapes = Shapes(
-    extraSmall = RoundedCornerShape(12.dp),
-    small = RoundedCornerShape(16.dp),
-    medium = RoundedCornerShape(24.dp),
-    large = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(32.dp)
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(24.dp)
 )
 
 object PermissionScreenTokens {

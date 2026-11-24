@@ -4,12 +4,16 @@ import android.app.PendingIntent
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MimeTypes
+import androidx.media3.decoder.ffmpeg.FfmpegLibrary
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.FazaApplication
@@ -70,6 +74,12 @@ class PlaybackService : MediaSessionService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
+        fun isFfmpegAudioDecoderAvailable(mimeType: String = MimeTypes.AUDIO_AC3): Boolean {
+            return runCatching {
+                FfmpegLibrary.isAvailable() && FfmpegLibrary.supportsFormat(mimeType)
+            }.getOrDefault(false)
+        }
+
         fun buildExoPlayer(
             context: android.content.Context,
             decoderMode: DecoderMode,
@@ -88,7 +98,8 @@ class PlaybackService : MediaSessionService() {
                     decoders = decoders,
                     isSoftwareDecoder = ::isSoftwareDecoder,
                     decoderMode = decoderMode,
-                    decoderFallbackEnabled = decoderFallbackEnabled
+                    decoderFallbackEnabled = decoderFallbackEnabled,
+                    ffmpegAudioAvailable = ::isFfmpegAudioDecoderAvailable
                 )
             }
 
@@ -109,16 +120,23 @@ class PlaybackService : MediaSessionService() {
                     buildUponParameters()
                         .setAllowVideoMixedMimeTypeAdaptiveness(true)
                         .setAllowAudioMixedMimeTypeAdaptiveness(true)
+                        .setAllowAudioMixedChannelCountAdaptiveness(true)
+                        .setAllowAudioMixedSampleRateAdaptiveness(true)
+                        .setExceedAudioConstraintsIfNecessary(true)
                         .setTunnelingEnabled(tunneledPlaybackEnabled)
                         .clearVideoSizeConstraints()
                 )
             }
+
+            val extractorsFactory = DefaultExtractorsFactory()
+                .setConstantBitrateSeekingEnabled(true)
 
             val loadControl = DefaultLoadControl.Builder()
                 .setBufferDurationsMs(15_000, 60_000, 1_500, 3_000)
                 .build()
 
             return ExoPlayer.Builder(context, renderersFactory)
+                .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractorsFactory))
                 .setTrackSelector(trackSelector)
                 .setLoadControl(loadControl)
                 .setAudioAttributes(defaultMovieAudioAttributes, handleAudioFocus)
@@ -140,7 +158,8 @@ class PlaybackService : MediaSessionService() {
                 "H.264 / AVC" to "video/avc",
                 "H.265 / HEVC" to "video/hevc",
                 "VP9" to "video/x-vnd.on2.vp9",
-                "AV1" to "video/av01"
+                "AV1" to "video/av01",
+                "AC-3 / E-AC-3 (Dolby)" to MimeTypes.AUDIO_AC3
             )
             return try {
                 val infos = android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos
@@ -183,18 +202,33 @@ class PlaybackService : MediaSessionService() {
                             hardwareAccelerated = isHwAccel
                         )
                     }.map { it.name }
+                    val hasFfmpegSw = isFfmpegAudioMime(mime) && isFfmpegAudioDecoderAvailable(mime)
                     DeviceCodecCapability(
                         formatLabel = label,
                         hasHardwareDecoder = hwNames.isNotEmpty(),
-                        hasSoftwareDecoder = swNames.isNotEmpty(),
+                        hasSoftwareDecoder = swNames.isNotEmpty() || hasFfmpegSw,
                         primaryHardwareCodec = hwNames.firstOrNull(),
                         primarySoftwareCodec = swNames.firstOrNull()
+                            ?: if (hasFfmpegSw) "FFmpeg (AC-3 / E-AC-3)" else null
                     )
                 }
             } catch (_: Exception) {
                 emptyList()
             }
         }
+    }
+}
+
+internal fun isFfmpegAudioMime(mimeType: String): Boolean {
+    return when (mimeType.lowercase()) {
+        MimeTypes.AUDIO_AC3,
+        MimeTypes.AUDIO_E_AC3,
+        MimeTypes.AUDIO_E_AC3_JOC,
+        MimeTypes.AUDIO_TRUEHD,
+        MimeTypes.AUDIO_DTS,
+        MimeTypes.AUDIO_DTS_HD,
+        MimeTypes.AUDIO_DTS_EXPRESS -> true
+        else -> false
     }
 }
 
@@ -219,8 +253,17 @@ internal fun <T> selectCodecInfosForMode(
     decoders: List<T>,
     isSoftwareDecoder: (T) -> Boolean,
     decoderMode: DecoderMode,
-    decoderFallbackEnabled: Boolean
+    decoderFallbackEnabled: Boolean,
+    ffmpegAudioAvailable: (String) -> Boolean = { false }
 ): List<T> {
+    if (isFfmpegAudioMime(mimeType)) {
+        // Prefer bundled FFmpeg PCM decoding for AC-3 / E-AC-3 / TrueHD / DTS in AUTO & SOFTWARE
+        // modes to avoid silent OEM MediaCodec stubs or incompatible passthrough sinks.
+        if (decoderMode != DecoderMode.HARDWARE && ffmpegAudioAvailable(mimeType)) {
+            return emptyList()
+        }
+        return decoders
+    }
     if (!mimeType.startsWith("video/", ignoreCase = true)) {
         return decoders
     }

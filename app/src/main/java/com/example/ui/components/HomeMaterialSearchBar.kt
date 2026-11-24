@@ -60,7 +60,7 @@ fun HomeMaterialSearchBar(
     val isActive = isFocused || query.isNotEmpty()
 
     val containerColor by animateColorAsState(
-        targetValue = if (isFocused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
+        targetValue = if (isFocused) colors.surfaceContainer else colors.surfaceContainerLow,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "m3_search_container"
     )
@@ -74,12 +74,15 @@ fun HomeMaterialSearchBar(
         shape = CircleShape,
         color = containerColor,
         contentColor = colors.onSurface,
-        tonalElevation = 2.dp,
+        tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = if (isFocused) BorderStroke(1.5.dp, colors.primary) else null,
+        border = BorderStroke(
+            width = if (isFocused) 1.25.dp else 1.dp,
+            color = if (isFocused) colors.primary else colors.outlineVariant.copy(alpha = 0.65f)
+        ),
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 52.dp)
             .testTag("home_search_bar")
     ) {
         Row(

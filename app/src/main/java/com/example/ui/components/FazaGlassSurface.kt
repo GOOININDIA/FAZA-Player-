@@ -136,13 +136,12 @@ fun rememberFazaAccentGradient(): Brush {
 }
 
 /**
- * Authentic Material You expressive rounded tonal card with clean tonal elevation
- * (borderless unless highlighted) and spring bounce press physics.
+ * Clean minimalist tonal card with subtle 1dp hairline border and restrained press feedback.
  */
 @Composable
 fun FazaGlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(28.dp),
+    shape: Shape = RoundedCornerShape(18.dp),
     accented: Boolean = false,
     highlightedBorder: Boolean = false,
     onClick: (() -> Unit)? = null,
@@ -150,12 +149,12 @@ fun FazaGlassCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    val containerColor = if (accented) colors.secondaryContainer else colors.surfaceContainerLow
-    val contentColor = if (accented) colors.onSecondaryContainer else colors.onSurface
-    val borderStroke = if (highlightedBorder) {
-        BorderStroke(width = 1.5.dp, color = colors.primary)
-    } else {
-        null
+    val containerColor = if (accented) colors.surfaceContainer else colors.surfaceContainerLow
+    val contentColor = colors.onSurface
+    val borderStroke = when {
+        highlightedBorder -> BorderStroke(width = 1.25.dp, color = colors.primary)
+        accented -> BorderStroke(width = 1.dp, color = colors.primary.copy(alpha = 0.28f))
+        else -> BorderStroke(width = 1.dp, color = colors.outlineVariant.copy(alpha = 0.55f))
     }
 
     val interactiveModifier = if (onClick != null) {
@@ -163,7 +162,7 @@ fun FazaGlassCard(
         val pressScale = rememberFazaBounceScale(
             interactionSource = interactionSource,
             enabled = true,
-            pressedScale = 0.96f
+            pressedScale = 0.98f
         )
         Modifier
             .graphicsLayer {
@@ -184,7 +183,7 @@ fun FazaGlassCard(
         shape = shape,
         color = containerColor,
         contentColor = contentColor,
-        tonalElevation = if (accented) 2.dp else 0.dp,
+        tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         border = borderStroke,
         modifier = modifier.then(interactiveModifier)
@@ -199,30 +198,30 @@ fun FazaGlassCard(
 }
 
 /**
- * Material You tonal icon container badge.
+ * Clean minimalist icon tile with subtle tonal fill instead of heavy saturated circles.
  */
 @Composable
 fun FazaGlassIconBadge(
     icon: ImageVector,
     contentDescription: String? = null,
-    size: Dp = 44.dp,
-    iconSize: Dp = 21.dp,
-    cornerRadius: Dp = 22.dp,
+    size: Dp = 40.dp,
+    iconSize: Dp = 20.dp,
+    cornerRadius: Dp = 12.dp,
     useBlueHighlight: Boolean = false,
     useSolidGradient: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val shape = if (cornerRadius >= size / 2) CircleShape else RoundedCornerShape(cornerRadius)
+    val shape = RoundedCornerShape(cornerRadius.coerceAtMost(14.dp))
     val bgColor = when {
-        useSolidGradient -> colors.primary
-        useBlueHighlight -> colors.tertiaryContainer
-        else -> colors.primaryContainer
+        useSolidGradient -> colors.primary.copy(alpha = 0.14f)
+        useBlueHighlight -> colors.surfaceContainerHigh
+        else -> colors.surfaceContainerHigh
     }
     val iconTint = when {
-        useSolidGradient -> colors.onPrimary
-        useBlueHighlight -> colors.onTertiaryContainer
-        else -> colors.onPrimaryContainer
+        useSolidGradient -> colors.primary
+        useBlueHighlight -> colors.onSurface
+        else -> colors.primary
     }
 
     Box(
@@ -242,7 +241,7 @@ fun FazaGlassIconBadge(
 }
 
 /**
- * Material You circular filled-tonal top-bar icon button with spring bounce (48dp touch target).
+ * Minimalist top-bar icon button with quiet hover/active styling and 48dp touch target.
  */
 @Composable
 fun FazaGlassTopBarIconButton(
@@ -257,14 +256,14 @@ fun FazaGlassTopBarIconButton(
     val bounceScale = rememberFazaBounceScale(
         interactionSource = interactionSource,
         enabled = true,
-        pressedScale = 0.88f
+        pressedScale = 0.92f
     )
     val fillColor = if (highlighted) {
-        colors.primaryContainer
+        colors.primary.copy(alpha = 0.14f)
     } else {
-        colors.surfaceContainerHigh
+        Color.Transparent
     }
-    val iconTint = if (highlighted) colors.onPrimaryContainer else colors.onSurfaceVariant
+    val iconTint = if (highlighted) colors.primary else colors.onSurfaceVariant
 
     IconButton(
         onClick = onClick,
@@ -278,7 +277,7 @@ fun FazaGlassTopBarIconButton(
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(38.dp)
                 .clip(CircleShape)
                 .background(fillColor),
             contentAlignment = Alignment.Center
@@ -294,7 +293,7 @@ fun FazaGlassTopBarIconButton(
 }
 
 /**
- * Material You full-pill filled primary button with spring bounce press physics.
+ * Minimalist pill primary button with crisp high-contrast fill and tactile press response.
  */
 @Composable
 fun FazaAccentGradientButton(
@@ -302,7 +301,7 @@ fun FazaAccentGradientButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     shape: Shape = CircleShape,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = 22.dp, vertical = 13.dp),
     content: @Composable RowScope.() -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -310,7 +309,7 @@ fun FazaAccentGradientButton(
     val scale = rememberFazaBounceScale(
         interactionSource = interactionSource,
         enabled = enabled,
-        pressedScale = 0.94f
+        pressedScale = 0.96f
     )
     val containerColor = if (enabled) colors.primary else colors.surfaceContainerHighest
     val contentColor = if (enabled) colors.onPrimary else colors.onSurfaceVariant
@@ -346,7 +345,7 @@ fun FazaAccentGradientButton(
 }
 
 /**
- * Material You tonal capsule badge (counts, tags, status indicators).
+ * Understated minimalist micro-badge for counts, states, and tags.
  */
 @Composable
 fun FazaGlassPillBadge(
@@ -356,23 +355,23 @@ fun FazaGlassPillBadge(
 ) {
     val colors = MaterialTheme.colorScheme
     val bgColor = if (useBlueAccent) {
-        colors.tertiaryContainer
+        colors.surfaceContainerHigh
     } else {
-        colors.secondaryContainer
+        colors.primary.copy(alpha = 0.12f)
     }
-    val textColor = if (useBlueAccent) colors.onTertiaryContainer else colors.onSecondaryContainer
+    val textColor = if (useBlueAccent) colors.onSurfaceVariant else colors.primary
 
     Surface(
-        shape = CircleShape,
+        shape = RoundedCornerShape(8.dp),
         color = bgColor,
         modifier = modifier
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = textColor,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
     }
 }

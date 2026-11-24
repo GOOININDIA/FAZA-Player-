@@ -49,42 +49,42 @@ fun FazaBrandLogo(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val logoShape = RoundedCornerShape(14.dp)
+        val logoShape = RoundedCornerShape(10.dp)
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(34.dp)
                 .clip(logoShape)
-                .background(colors.primaryContainer),
+                .background(colors.surfaceContainerHigh),
             contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(id = R.drawable.faza_icon_fg),
                 contentDescription = "FAZA Player Logo",
                 modifier = Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(9.dp))
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(7.dp))
             )
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
 
         Column(verticalArrangement = Arrangement.Center) {
             Text(
                 text = buildAnnotatedString {
                     withStyle(
                         SpanStyle(
-                            fontWeight = FontWeight.ExtraBold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.onSurface,
-                            letterSpacing = (-0.4).sp
+                            letterSpacing = (-0.3).sp
                         )
                     ) {
                         append("FAZA ")
                     }
                     withStyle(
                         SpanStyle(
-                            fontWeight = FontWeight.Bold,
-                            color = colors.primary,
-                            letterSpacing = (-0.2).sp
+                            fontWeight = FontWeight.Normal,
+                            color = colors.onSurfaceVariant,
+                            letterSpacing = (-0.1).sp
                         )
                     ) {
                         append("Player")
@@ -96,25 +96,14 @@ fun FazaBrandLogo(
             )
 
             if (!subtitle.isNullOrBlank()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(colors.primary)
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -131,7 +120,7 @@ fun TopRightSettingsButton(
     val bounceScale = rememberFazaBounceScale(
         interactionSource = interactionSource,
         enabled = true,
-        pressedScale = 0.88f
+        pressedScale = 0.92f
     )
 
     IconButton(
@@ -146,27 +135,19 @@ fun TopRightSettingsButton(
             .testTag("top_right_settings_button")
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(colors.surfaceContainerHigh),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Settings",
-                    tint = colors.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            Icon(
+                imageVector = Icons.Outlined.Settings,
+                contentDescription = "Settings",
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(21.dp)
+            )
 
             if (hasUpdateBadge) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .offset(x = (-2).dp, y = 2.dp)
-                        .size(9.dp)
+                        .offset(x = 2.dp, y = (-2).dp)
+                        .size(8.dp)
                         .clip(CircleShape)
                         .background(colors.error)
                         .border(1.5.dp, colors.surface, CircleShape)

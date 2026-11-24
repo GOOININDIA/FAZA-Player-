@@ -1229,15 +1229,15 @@ internal fun SectionCard(
     content: @Composable () -> Unit
 ) {
     FazaGlassCard(
-        shape = RoundedCornerShape(28.dp),
-        contentPadding = PaddingValues(18.dp),
+        shape = RoundedCornerShape(18.dp),
+        contentPadding = PaddingValues(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onSurface
         )
         if (!subtitle.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(2.dp))

@@ -439,57 +439,49 @@ fun FoldersScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .testTag("folders_network_stream_card"),
-                                        shape = RoundedCornerShape(28.dp),
-                                        accented = true,
+                                        shape = RoundedCornerShape(16.dp),
+                                        accented = false,
                                         onClick = { showStreamDialog = true }
                                     ) {
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             FazaGlassIconBadge(
                                                 icon = Icons.Filled.AddLink,
-                                                size = 46.dp,
-                                                iconSize = 22.dp,
-                                                cornerRadius = 23.dp,
+                                                size = 38.dp,
+                                                iconSize = 19.dp,
+                                                cornerRadius = 10.dp,
                                                 useSolidGradient = true
                                             )
-                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "Play Network Stream",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                    text = "Network Stream",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface
                                                 )
                                                 Text(
                                                     text = if (recentNetworkStreams.isNotEmpty()) {
-                                                        "Enter URL or replay ${recentNetworkStreams.size} saved stream${if (recentNetworkStreams.size == 1) "" else "s"}"
+                                                        "Open URL or replay ${recentNetworkStreams.size} saved stream${if (recentNetworkStreams.size == 1) "" else "s"}"
                                                     } else {
-                                                        "HTTP, HTTPS, HLS (.m3u8), DASH (.mpd), MP4/MKV"
+                                                        "HLS, DASH, MP4, MKV URLs"
                                                     },
                                                     style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                             }
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(34.dp)
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.65f)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                                    contentDescription = "Open stream dialog",
-                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            }
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                                contentDescription = "Open stream dialog",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -502,27 +494,21 @@ fun FoldersScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                                            .padding(horizontal = 2.dp, vertical = 2.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Video Folders",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onBackground,
-                                                modifier = Modifier.testTag("home_folders_header")
-                                            )
-                                            Text(
-                                                text = "Tap a folder to browse videos · Pull down to scan",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        FazaGlassPillBadge(
+                                        Text(
+                                            text = "Folders",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            modifier = Modifier.testTag("home_folders_header")
+                                        )
+                                        Text(
                                             text = "${folders.size} folder${if (folders.size == 1) "" else "s"}",
-                                            useBlueAccent = true
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -600,16 +586,14 @@ private fun DeviceFolderCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("folder_card_${folder.name}"),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(16.dp),
         onClick = onOpenFolder
     ) {
-        // Material You Expressive Inset Rounded Thumbnail Header
+        // Clean edge-to-edge minimalist media thumbnail header
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = 8.dp, top = 8.dp)
                 .aspectRatio(16f / 10f)
-                .clip(RoundedCornerShape(20.dp))
                 .background(colors.surfaceContainerHigh)
         ) {
             CachedVideoThumbnail(
@@ -628,24 +612,6 @@ private fun DeviceFolderCard(
                     .background(FolderThumbOverlayBrush)
             )
 
-            // Material You circular tonal folder badge at top-start
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(colors.secondaryContainer.copy(alpha = 0.94f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Folder,
-                    contentDescription = null,
-                    tint = colors.onSecondaryContainer,
-                    modifier = Modifier.size(17.dp)
-                )
-            }
-
             // Optional unlink icon for SAF-linked folders
             if (folder.isSafLinked && folder.folderUri != null) {
                 IconButton(
@@ -656,25 +622,25 @@ private fun DeviceFolderCard(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(30.dp)
+                            .size(28.dp)
                             .clip(CircleShape)
-                            .background(colors.inverseSurface.copy(alpha = 0.84f)),
+                            .background(Color.Black.copy(alpha = 0.68f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Filled.LinkOff,
                             contentDescription = "Unlink folder",
-                            tint = colors.inverseOnSurface,
-                            modifier = Modifier.size(15.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
             }
 
-            // Material You tonal video count capsule at bottom-end of thumbnail
+            // Understated dark video count tag at bottom-end of thumbnail
             Surface(
-                color = colors.primaryContainer.copy(alpha = 0.95f),
-                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.68f),
+                shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp)
@@ -682,54 +648,35 @@ private fun DeviceFolderCard(
                 Text(
                     text = countLabel,
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                 )
             }
         }
 
-        // Folder metadata footer
-        Row(
+        // Minimalist folder title & size footer
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = folder.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = if (sizeLabel.isNotEmpty()) "$countLabel · $sizeLabel" else countLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(colors.surfaceContainerHighest),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "Open ${folder.name}",
-                    tint = colors.onSurfaceVariant,
-                    modifier = Modifier.size(17.dp)
-                )
-            }
+            Text(
+                text = folder.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (sizeLabel.isNotEmpty()) sizeLabel else countLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -747,7 +694,7 @@ fun VideoSortPillButton(
     val bounceScale = rememberFazaBounceScale(
         interactionSource = interactionSource,
         enabled = true,
-        pressedScale = 0.92f
+        pressedScale = 0.95f
     )
 
     Box(modifier = modifier) {
@@ -755,8 +702,9 @@ fun VideoSortPillButton(
             onClick = { expanded = true },
             interactionSource = interactionSource,
             shape = pillShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
             modifier = Modifier
                 .graphicsLayer {
                     scaleX = bounceScale
@@ -766,27 +714,27 @@ fun VideoSortPillButton(
                 .testTag("${testTagPrefix}_sort_button")
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Sort,
                     contentDescription = "Sort videos",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
                     text = selectedSort.label,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Icon(
                     imageVector = Icons.Filled.KeyboardArrowDown,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.tertiary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
             }

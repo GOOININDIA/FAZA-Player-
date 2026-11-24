@@ -605,78 +605,67 @@ private fun ProfileHeroCard(
 ) {
     val runtimeLabel = if (totalDurationMs > 0L) Formatters.formatDuration(totalDurationMs) else "0:00"
     val colors = MaterialTheme.colorScheme
-    val cardShape = RoundedCornerShape(28.dp)
 
-    Surface(
-        shape = cardShape,
-        color = colors.primaryContainer,
-        contentColor = colors.onPrimaryContainer,
-        tonalElevation = 2.dp,
-        shadowElevation = 0.dp,
-        modifier = modifier
-            .clip(cardShape)
-            .testTag("profile_hero_card")
+    FazaGlassCard(
+        shape = RoundedCornerShape(18.dp),
+        contentPadding = PaddingValues(if (useTwoByTwoStats) 16.dp else 18.dp),
+        modifier = modifier.testTag("profile_hero_card")
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(if (useTwoByTwoStats) 16.dp else 20.dp),
-            verticalArrangement = Arrangement.spacedBy(if (useTwoByTwoStats) 12.dp else 16.dp)
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (useTwoByTwoStats) 10.dp else 14.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(if (useTwoByTwoStats) 50.dp else 60.dp)
+                        .size(if (useTwoByTwoStats) 44.dp else 48.dp)
                         .clip(CircleShape)
-                        .background(colors.primary),
+                        .background(colors.primary.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Person,
                         contentDescription = "User Profile",
-                        tint = colors.onPrimary,
-                        modifier = Modifier.size(if (useTwoByTwoStats) 26.dp else 30.dp)
+                        tint = colors.primary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
                         text = "Personal Cinema",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${stringResource(R.string.app_name)} · v${BuildConfig.VERSION_NAME}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onPrimaryContainer.copy(alpha = 0.82f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "Decoder: ${preferences.decoderMode.badge} · ${preferences.themeMode.label} Theme",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.primary,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
+                        color = colors.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${stringResource(R.string.app_name)} · v${BuildConfig.VERSION_NAME} · ${preferences.decoderMode.badge}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Surface(
-                    color = colors.surfaceContainerLowest,
-                    shape = RoundedCornerShape(16.dp)
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.faza_icon_fg),
                         contentDescription = "FAZA Player",
                         modifier = Modifier
-                            .padding(6.dp)
-                            .size(30.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(7.dp))
                     )
                 }
             }
@@ -757,8 +746,8 @@ private fun ProfileAiLauncherCard(
     modifier: Modifier = Modifier
 ) {
     FazaGlassCard(
-        shape = RoundedCornerShape(24.dp),
-        accented = true,
+        shape = RoundedCornerShape(18.dp),
+        accented = false,
         onClick = onOpenAssistant,
         contentPadding = PaddingValues(16.dp),
         modifier = modifier.testTag("profile_ai_launcher_card")
@@ -772,19 +761,19 @@ private fun ProfileAiLauncherCard(
             ) {
                 FazaGlassIconBadge(
                     icon = Icons.Filled.AutoAwesome,
-                    size = 46.dp,
-                    iconSize = 22.dp,
-                    cornerRadius = 15.dp,
+                    size = 40.dp,
+                    iconSize = 20.dp,
+                    cornerRadius = 11.dp,
                     useSolidGradient = true
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "FAZA AI Assistant",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Multi-turn Gemini chat with live Google Search grounding",
+                        text = "Chat & search for movies, formats, and playback tips",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -794,7 +783,8 @@ private fun ProfileAiLauncherCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = "Open AI Assistant",
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
@@ -803,7 +793,7 @@ private fun ProfileAiLauncherCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     shape = CircleShape,
                     modifier = Modifier
                         .clip(CircleShape)
@@ -817,18 +807,18 @@ private fun ProfileAiLauncherCard(
                         Icon(
                             imageVector = Icons.Filled.Public,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = "Trending movies",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
                 Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                     shape = CircleShape,
                     modifier = Modifier
                         .clip(CircleShape)
@@ -842,13 +832,13 @@ private fun ProfileAiLauncherCard(
                         Icon(
                             imageVector = Icons.Filled.AutoAwesome,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = if (assistantMessagesCount > 0) "Continue chat" else "Start chatting",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -865,8 +855,8 @@ private fun ProfileStatPill(
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        color = colors.surfaceContainerLowest.copy(alpha = 0.88f),
-        shape = RoundedCornerShape(18.dp),
+        color = colors.surfaceContainer,
+        shape = RoundedCornerShape(12.dp),
         modifier = modifier
     ) {
         Column(
@@ -877,7 +867,7 @@ private fun ProfileStatPill(
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = colors.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -902,11 +892,11 @@ private fun ProfileShortcutCard(
     modifier: Modifier = Modifier
 ) {
     FazaGlassCard(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(16.dp),
         accented = highlight,
         highlightedBorder = false,
         onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 13.dp),
         modifier = modifier
     ) {
         Row(
@@ -916,9 +906,9 @@ private fun ProfileShortcutCard(
         ) {
             FazaGlassIconBadge(
                 icon = icon,
-                size = 42.dp,
-                iconSize = 20.dp,
-                cornerRadius = 21.dp,
+                size = 38.dp,
+                iconSize = 19.dp,
+                cornerRadius = 10.dp,
                 useSolidGradient = highlight,
                 useBlueHighlight = !highlight
             )
@@ -926,19 +916,15 @@ private fun ProfileShortcutCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (highlight) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (highlight) {
-                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.80f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -956,19 +942,19 @@ private fun ProfileSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .padding(horizontal = 2.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
             )
             Text(
                 text = title,
@@ -976,6 +962,10 @@ private fun ProfileSectionHeader(
                 fontWeight = FontWeight.SemiBold
             )
         }
-        FazaGlassPillBadge(text = countLabel, useBlueAccent = true)
+        Text(
+            text = countLabel,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

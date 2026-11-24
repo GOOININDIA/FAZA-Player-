@@ -232,19 +232,19 @@ private fun rememberFloatingDockPalette(): FloatingDockPalette {
     val isDark = LocalFazaIsDark.current
     return remember(colors, isDark) {
         FloatingDockPalette(
-            dockBackground = colors.surfaceContainerHigh,
-            dockSurfaceTop = colors.surfaceContainerHigh,
-            dockSurfaceBottom = colors.surfaceContainerHigh,
-            dockBorderStart = colors.outlineVariant.copy(alpha = if (isDark) 0.45f else 0.55f),
-            dockBorderEnd = colors.outlineVariant.copy(alpha = if (isDark) 0.32f else 0.45f),
-            activeCapsuleColor = colors.primaryContainer,
-            activeCapsuleEnd = colors.primaryContainer,
-            activeContentColor = colors.onPrimaryContainer,
+            dockBackground = colors.surfaceContainerLow,
+            dockSurfaceTop = colors.surfaceContainerLow,
+            dockSurfaceBottom = colors.surfaceContainerLow,
+            dockBorderStart = colors.outlineVariant.copy(alpha = if (isDark) 0.7f else 0.85f),
+            dockBorderEnd = colors.outlineVariant.copy(alpha = if (isDark) 0.7f else 0.85f),
+            activeCapsuleColor = colors.primary.copy(alpha = if (isDark) 0.16f else 0.12f),
+            activeCapsuleEnd = colors.primary.copy(alpha = if (isDark) 0.16f else 0.12f),
+            activeContentColor = colors.primary,
             inactiveIconColor = colors.onSurfaceVariant,
-            searchBackground = colors.secondaryContainer,
-            searchIconColor = colors.onSecondaryContainer,
-            searchBorderStart = colors.outlineVariant.copy(alpha = if (isDark) 0.40f else 0.50f),
-            searchBorderEnd = colors.outlineVariant.copy(alpha = if (isDark) 0.30f else 0.40f),
+            searchBackground = colors.surfaceContainerLow,
+            searchIconColor = colors.onSurface,
+            searchBorderStart = colors.outlineVariant.copy(alpha = if (isDark) 0.7f else 0.85f),
+            searchBorderEnd = colors.outlineVariant.copy(alpha = if (isDark) 0.7f else 0.85f),
             badgeContainerColor = colors.error,
             badgeContentColor = colors.onError
         )
@@ -279,13 +279,14 @@ fun FloatingNavigationDock(
             horizontalArrangement = Arrangement.spacedBy(dims.horizontalGap, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Pure Material You Tonal Capsule Navigation Bar
+            // Clean Minimalist Capsule Navigation Bar
             Surface(
                 shape = pillShape,
                 color = palette.dockBackground,
                 contentColor = MaterialTheme.colorScheme.onSurface,
-                shadowElevation = 6.dp,
-                tonalElevation = 3.dp,
+                border = BorderStroke(1.dp, palette.dockBorderStart),
+                shadowElevation = 2.dp,
+                tonalElevation = 0.dp,
                 modifier = Modifier
                     .width(dims.navBarWidth)
                     .height(dims.navBarHeight)
@@ -499,8 +500,9 @@ private fun FloatingSearchSquareButton(
         shape = shape,
         color = containerColor,
         contentColor = iconColor,
-        shadowElevation = 6.dp,
-        tonalElevation = 3.dp,
+        border = BorderStroke(1.dp, palette.searchBorderStart),
+        shadowElevation = 2.dp,
+        tonalElevation = 0.dp,
         modifier = Modifier
             .graphicsLayer {
                 scaleX = buttonScale
@@ -557,14 +559,15 @@ fun FloatingHomeNavigationRail(
     modifier: Modifier = Modifier
 ) {
     val palette = rememberFloatingDockPalette()
-    val railShape = RoundedCornerShape(28.dp)
+    val railShape = RoundedCornerShape(20.dp)
 
     Surface(
         shape = railShape,
         color = palette.dockBackground,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 3.dp,
-        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, palette.dockBorderStart),
+        tonalElevation = 0.dp,
+        shadowElevation = 2.dp,
         modifier = modifier
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start))
             .padding(start = 12.dp, top = 12.dp, bottom = 12.dp)

@@ -164,6 +164,7 @@ import com.example.data.model.RunningTimePosition
 import com.example.data.model.SeekBarStyle
 import com.example.player.PlayerManager
 import com.example.ui.components.AlwaysOnAppIconOverlay
+import com.example.util.VideoLanguageResolver
 import com.example.ui.components.AlwaysOnRunningTimeOverlay
 import com.example.ui.components.AppIconOverlayBottomSheet
 import com.example.ui.components.FzCustomiseItemsBottomSheet
@@ -1154,6 +1155,16 @@ fun PlayerScreen(
 
         // OPTIONAL PERMANENT APP ICON OVERLAY (Preset corners/edges or Custom free placement)
         if (showAlwaysOnOverlay && appIconOverlayConfig.enabled) {
+            val activeVideoLanguage = remember(audioTracks, video?.title, appIconOverlayConfig.showVideoLanguage) {
+                if (appIconOverlayConfig.showVideoLanguage) {
+                    VideoLanguageResolver.resolveFromAudioTracks(
+                        audioTracks = audioTracks,
+                        fallbackTitle = video?.title.orEmpty()
+                    )
+                } else {
+                    null
+                }
+            }
             val iconPos = appIconOverlayConfig.position
             when {
                 iconPos.isTopRow -> {
@@ -1195,6 +1206,7 @@ fun PlayerScreen(
                             config = appIconOverlayConfig,
                             availableWidth = screenWidthDp,
                             isPlaying = isPlaying,
+                            videoLanguageLabel = activeVideoLanguage,
                             modifier = Modifier.align(topIconAlignment)
                         )
                     }
@@ -1238,6 +1250,7 @@ fun PlayerScreen(
                             config = appIconOverlayConfig,
                             availableWidth = screenWidthDp,
                             isPlaying = isPlaying,
+                            videoLanguageLabel = activeVideoLanguage,
                             modifier = Modifier.align(bottomIconAlignment)
                         )
                     }
@@ -1257,6 +1270,7 @@ fun PlayerScreen(
                             config = appIconOverlayConfig,
                             availableWidth = screenWidthDp,
                             isPlaying = isPlaying,
+                            videoLanguageLabel = activeVideoLanguage,
                             modifier = Modifier.align(resolveAppIconOverlayAlignment(appIconOverlayConfig))
                         )
                     }

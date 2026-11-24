@@ -17,8 +17,8 @@ android {
     applicationId = "apk.faza.go"
     minSdk = 24
     targetSdk = 36
-    versionCode = 50
-    versionName = "1.48 Beta"
+    versionCode = 53
+    versionName = "1.51 Beta"
 
     manifestPlaceholders["ADMOB_APP_ID"] = "ca-app-pub-6572024129453689~5808434174"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -111,6 +111,7 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer.hls)
   implementation(libs.androidx.media3.session)
   implementation(libs.androidx.media3.ui)
+  implementation(libs.jellyfin.media3.ffmpeg.decoder)
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
@@ -154,10 +155,15 @@ dependencies {
   // "ksp"(libs.moshi.kotlin.codegen)
 }
 
-val exportProjectApk = tasks.register<Sync>("exportProjectApk") {
+val exportProjectApk = tasks.register<Copy>("exportProjectApk") {
   val apkSlug = (android.defaultConfig.versionName ?: "latest").replace(" ", "-")
+  val apkDir = rootProject.layout.projectDirectory.dir("apk")
+  doFirst {
+    apkDir.asFile.mkdirs()
+    apkDir.asFile.listFiles()?.filter { it.extension.equals("apk", ignoreCase = true) }?.forEach { it.delete() }
+  }
   from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
-  into(rootProject.layout.projectDirectory.dir("apk"))
+  into(apkDir)
   rename { "FAZA-Player-v${apkSlug}.apk" }
 }
 

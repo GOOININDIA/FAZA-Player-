@@ -184,11 +184,12 @@ enum class AppIconOverlayPosition(val label: String) {
 
 enum class AppIconOverlayAnimation(val label: String) {
     NONE("Off"),
-    PULSE("Pulse"),
-    FLOAT("Float"),
-    SPIN("Slow Spin"),
-    SHIMMER("Glow Pulse"),
-    SWING("Gentle Sway")
+    GEMINI_GLOW("Gemini Glow")
+}
+
+enum class AppIconLanguageLayout(val label: String) {
+    ONE_LINE("One Line"),
+    TWO_LINES("Two Lines")
 }
 
 data class AppIconOverlayConfig(
@@ -203,7 +204,9 @@ data class AppIconOverlayConfig(
     val customYFraction: Float = 0.12f,
     val animation: AppIconOverlayAnimation = AppIconOverlayAnimation.NONE,
     val animationSpeed: Float = 1.0f,
-    val animateOnlyWhilePlaying: Boolean = true
+    val animateOnlyWhilePlaying: Boolean = true,
+    val showVideoLanguage: Boolean = false,
+    val languageLayout: AppIconLanguageLayout = AppIconLanguageLayout.ONE_LINE
 )
 
 enum class PlayerAccentPreset(val label: String, val colorHex: Long?) {

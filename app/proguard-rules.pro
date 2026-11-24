@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep Media3 FFmpeg decoder extension (instantiated via reflection by DefaultRenderersFactory)
+-keep class androidx.media3.decoder.ffmpeg.** { *; }
+-keep class org.jellyfin.media3.** { *; }
+-dontwarn androidx.media3.decoder.ffmpeg.**
+

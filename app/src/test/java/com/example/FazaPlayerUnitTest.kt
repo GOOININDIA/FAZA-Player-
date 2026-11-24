@@ -27,6 +27,7 @@ import com.example.data.repository.UpdateRepository
 import com.example.util.Formatters
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -263,14 +264,56 @@ class FazaPlayerUnitTest {
         assertEquals(-1f, clampedHx, 0.001f)
         assertEquals(1f, clampedVy, 0.001f)
 
-        // Optional animation defaults & duration speed scaling
+        // Optional animation defaults: static by default, only Gemini Glow animation available
         assertEquals(com.example.data.model.AppIconOverlayAnimation.NONE, defaults.animation)
+        assertEquals(
+            listOf(
+                com.example.data.model.AppIconOverlayAnimation.NONE,
+                com.example.data.model.AppIconOverlayAnimation.GEMINI_GLOW
+            ),
+            com.example.data.model.AppIconOverlayAnimation.entries
+        )
         assertEquals(1.0f, defaults.animationSpeed, 0.001f)
         assertTrue(defaults.animateOnlyWhilePlaying)
         assertEquals(1400, com.example.ui.components.resolveAppIconAnimationDurationMs(1400, 1.0f))
         assertEquals(700, com.example.ui.components.resolveAppIconAnimationDurationMs(1400, 2.0f))
         assertEquals(2800, com.example.ui.components.resolveAppIconAnimationDurationMs(1400, 0.5f))
         assertEquals(700, com.example.ui.components.resolveAppIconAnimationDurationMs(1400, 9.0f))
+        assertEquals(
+            com.example.ui.components.sampleGeminiGlowSpectrum(0f),
+            com.example.ui.components.sampleGeminiGlowSpectrum(1f)
+        )
+        assertNotEquals(
+            com.example.ui.components.sampleGeminiGlowSpectrum(0f),
+            com.example.ui.components.sampleGeminiGlowSpectrum(0.4f)
+        )
+
+        // Optional video language & One Line / Two Lines defaults + native script resolver
+        assertFalse(defaults.showVideoLanguage)
+        assertEquals(com.example.data.model.AppIconLanguageLayout.ONE_LINE, defaults.languageLayout)
+        assertEquals("हिंदी", com.example.util.VideoLanguageResolver.resolveLanguageCodeOrName("hi"))
+        assertEquals("हिंदी", com.example.util.VideoLanguageResolver.resolveLanguageCodeOrName("hin"))
+        assertEquals("English", com.example.util.VideoLanguageResolver.resolveLanguageCodeOrName("en-US"))
+        assertEquals("বাংলা", com.example.util.VideoLanguageResolver.resolveLanguageCodeOrName("bn"))
+        assertEquals("বাংলা", com.example.util.VideoLanguageResolver.resolveLanguageCodeOrName("ben"))
+        assertEquals("தமிழ்", com.example.util.VideoLanguageResolver.resolveLanguageCodeOrName("ta"))
+        org.junit.Assert.assertNull(com.example.util.VideoLanguageResolver.resolveLanguageCodeOrName("und"))
+
+        val selectedBengali = listOf(
+            com.example.player.TrackOption("a_0_0", "English • 2ch • AAC", "en", 0, 0, isSelected = false),
+            com.example.player.TrackOption("a_0_1", "Bengali • 6ch • EAC3", "bn", 0, 1, isSelected = true)
+        )
+        assertEquals(
+            "বাংলা",
+            com.example.util.VideoLanguageResolver.resolveFromAudioTracks(selectedBengali, "Movie.mkv")
+        )
+        assertEquals(
+            "हिंदी",
+            com.example.util.VideoLanguageResolver.resolveFromAudioTracks(
+                emptyList(),
+                "Action.Movie.2026.Hindi.1080p.mkv"
+            )
+        )
     }
 
     @Test
@@ -914,7 +957,8 @@ class FazaPlayerUnitTest {
             val lightScheme = com.example.ui.theme.buildCustomAppColorScheme(preset.seedHex, isDark = false)
             val darkScheme = com.example.ui.theme.buildCustomAppColorScheme(preset.seedHex, isDark = true)
             assertTrue(lightScheme.background.red > 0.85f)
-            assertEquals(androidx.compose.ui.graphics.Color.Black, darkScheme.background)
+            assertEquals(com.example.ui.theme.FazaAmoledBlack, darkScheme.background)
+            assertTrue(darkScheme.background.red < 0.06f && darkScheme.background.green < 0.06f && darkScheme.background.blue < 0.06f)
             assertTrue(lightScheme.primary != darkScheme.primary)
         }
 
@@ -1574,4 +1618,84 @@ class FazaPlayerUnitTest {
         assertEquals("Next in 05:00", com.example.ui.components.formatUpNextBadge(5L * 60_000L))
         assertEquals("Up Next", com.example.ui.components.formatUpNextBadge(null))
     }
+
+    @Test
+    fun ac3AudioSupport_routesFfmpegDecodersAndFormatsTrackLabels() {
+        // AC-3 / E-AC-3 / TrueHD / DTS MIME types are recognized for FFmpeg decoding
+        assertTrue(com.example.player.isFfmpegAudioMime(androidx.media3.common.MimeTypes.AUDIO_AC3))
+        assertTrue(com.example.player.isFfmpegAudioMime(androidx.media3.common.MimeTypes.AUDIO_E_AC3))
+        assertTrue(com.example.player.isFfmpegAudioMime(androidx.media3.common.MimeTypes.AUDIO_E_AC3_JOC))
+        assertTrue(com.example.player.isFfmpegAudioMime(androidx.media3.common.MimeTypes.AUDIO_TRUEHD))
+        assertTrue(com.example.player.isFfmpegAudioMime(androidx.media3.common.MimeTypes.AUDIO_DTS))
+        assertTrue(com.example.player.isFfmpegAudioMime(androidx.media3.common.MimeTypes.AUDIO_DTS_HD))
+        assertFalse(com.example.player.isFfmpegAudioMime(androidx.media3.common.MimeTypes.AUDIO_AAC))
+        assertFalse(com.example.player.isFfmpegAudioMime(androidx.media3.common.MimeTypes.VIDEO_H264))
+
+        val platformAc3Decoders = listOf("OMX.vendor.ac3.decoder")
+
+        // AUTO & SOFTWARE modes route AC-3 to FFmpeg (empty platform list) when FFmpeg is available
+        assertTrue(
+            com.example.player.selectCodecInfosForMode(
+                mimeType = androidx.media3.common.MimeTypes.AUDIO_AC3,
+                decoders = platformAc3Decoders,
+                isSoftwareDecoder = { false },
+                decoderMode = DecoderMode.AUTO,
+                decoderFallbackEnabled = true,
+                ffmpegAudioAvailable = { true }
+            ).isEmpty()
+        )
+        assertTrue(
+            com.example.player.selectCodecInfosForMode(
+                mimeType = androidx.media3.common.MimeTypes.AUDIO_E_AC3,
+                decoders = platformAc3Decoders,
+                isSoftwareDecoder = { false },
+                decoderMode = DecoderMode.SOFTWARE,
+                decoderFallbackEnabled = true,
+                ffmpegAudioAvailable = { true }
+            ).isEmpty()
+        )
+
+        // HARDWARE mode tries platform AC-3 decoders first (and falls back to FFmpeg if absent)
+        assertEquals(
+            platformAc3Decoders,
+            com.example.player.selectCodecInfosForMode(
+                mimeType = androidx.media3.common.MimeTypes.AUDIO_AC3,
+                decoders = platformAc3Decoders,
+                isSoftwareDecoder = { false },
+                decoderMode = DecoderMode.HARDWARE,
+                decoderFallbackEnabled = true,
+                ffmpegAudioAvailable = { true }
+            )
+        )
+
+        // If FFmpeg isn't available on the current runtime (e.g. JVM), platform decoders remain intact
+        assertEquals(
+            platformAc3Decoders,
+            com.example.player.selectCodecInfosForMode(
+                mimeType = androidx.media3.common.MimeTypes.AUDIO_AC3,
+                decoders = platformAc3Decoders,
+                isSoftwareDecoder = { false },
+                decoderMode = DecoderMode.AUTO,
+                decoderFallbackEnabled = true,
+                ffmpegAudioAvailable = { false }
+            )
+        )
+
+        // Clean human-readable AC-3 / surround track labels
+        assertEquals("AC3", com.example.player.formatAudioCodecLabel(androidx.media3.common.MimeTypes.AUDIO_AC3))
+        assertEquals("E-AC3", com.example.player.formatAudioCodecLabel(androidx.media3.common.MimeTypes.AUDIO_E_AC3))
+        assertEquals("E-AC3 Atmos", com.example.player.formatAudioCodecLabel(androidx.media3.common.MimeTypes.AUDIO_E_AC3_JOC))
+        assertEquals("TrueHD", com.example.player.formatAudioCodecLabel(androidx.media3.common.MimeTypes.AUDIO_TRUEHD))
+        assertEquals("DTS", com.example.player.formatAudioCodecLabel(androidx.media3.common.MimeTypes.AUDIO_DTS))
+        assertEquals("AAC", com.example.player.formatAudioCodecLabel(androidx.media3.common.MimeTypes.AUDIO_AAC))
+        assertEquals("AUDIO", com.example.player.formatAudioCodecLabel(null))
+
+        assertEquals("", com.example.player.formatAudioChannelLayout(0))
+        assertEquals("Mono", com.example.player.formatAudioChannelLayout(1))
+        assertEquals("Stereo", com.example.player.formatAudioChannelLayout(2))
+        assertEquals("5.1", com.example.player.formatAudioChannelLayout(6))
+        assertEquals("7.1", com.example.player.formatAudioChannelLayout(8))
+        assertEquals("4ch", com.example.player.formatAudioChannelLayout(4))
+    }
 }
+
