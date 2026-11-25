@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextEquals
@@ -22,6 +24,8 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -55,9 +59,14 @@ class ExampleRobolectricTest {
         composeRule.onNodeWithTag("floating_navigation_dock").assertIsDisplayed()
         composeRule.onNodeWithTag("nav_home").assertIsDisplayed()
         composeRule.onNode(hasText("Home") and hasAnyAncestor(hasTestTag("floating_navigation_dock"))).assertDoesNotExist()
+        composeRule.onNodeWithTag("nav_favorites").assertIsDisplayed()
         composeRule.onNodeWithTag("nav_profile").assertIsDisplayed()
         composeRule.onNodeWithTag("nav_settings").assertIsDisplayed()
         composeRule.onNodeWithTag("floating_search_button").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("nav_favorites").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("favorites_empty_state").assertIsDisplayed()
 
         composeRule.onNodeWithTag("nav_profile").performClick()
         composeRule.waitForIdle()
@@ -426,8 +435,8 @@ class ExampleRobolectricTest {
 
     @Test
     fun `settings tab hides search and shows updated about and updates links and Made in India`() {
-        assertEquals(53, BuildConfig.VERSION_CODE)
-        assertEquals("1.51 Beta", BuildConfig.VERSION_NAME)
+        assertEquals(59, BuildConfig.VERSION_CODE)
+        assertEquals("1.57 Beta", BuildConfig.VERSION_NAME)
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("nav_settings").performClick()
@@ -450,7 +459,7 @@ class ExampleRobolectricTest {
             .performScrollToNode(hasTestTag("about_whats_new_card"))
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("about_whats_new_card").assertIsDisplayed()
-        composeRule.onNode(hasText("What's New – v1.51 Beta"), useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNode(hasText("What's New – v1.57 Beta"), useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithTag("settings_detail_list")
             .performScrollToNode(hasTestTag("about_direct_download_card"))
@@ -482,6 +491,20 @@ class ExampleRobolectricTest {
         composeRule.onNodeWithTag("about_instagram_button").assertIsDisplayed()
 
         composeRule.onNodeWithTag("settings_detail_list")
+            .performScrollToNode(hasTestTag("about_special_thanks_card"))
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("about_special_thanks_card").assertIsDisplayed()
+        composeRule.onNodeWithTag("about_special_thanks_google_icon", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("about_special_thanks_title", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertTextEquals("Special Thanks")
+        composeRule.onNodeWithTag("about_special_thanks_message", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertTextEquals(
+                "Special thanks to Google for helping us to build FAZA Player. Your technology, innovation, and support have helped make this application possible."
+            )
+
+        composeRule.onNodeWithTag("settings_detail_list")
             .performScrollToNode(hasTestTag("about_made_in_india_text"))
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("about_made_in_india_text", useUnmergedTree = true)
@@ -490,12 +513,15 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `ads only show when internet is connected and stay hidden offline`() {
+    fun `test banner ads show on home and profile only when online and hide offline`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        val app = ApplicationProvider.getApplicationContext<FazaApplication>()
+        kotlinx.coroutines.runBlocking {
+            app.preferencesRepository.setFreeAccessState(watchedCount = 0, expiresAtMs = 0L)
+        }
         val cm = context.getSystemService(ConnectivityManager::class.java)
         val shadowCm = shadowOf(cm)
 
-        // Ensure online with NET_CAPABILITY_INTERNET and notify registered NetworkCallbacks -> ad banner renders on Home
         val activeNetwork = cm.activeNetwork ?: org.robolectric.shadows.ShadowNetwork.newInstance(101)
         val onlineCaps = ShadowNetworkCapabilities.newInstance()
         shadowOf(onlineCaps).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -514,7 +540,6 @@ class ExampleRobolectricTest {
         }
         composeRule.onNodeWithTag("home_ad_banner").assertIsDisplayed()
 
-        // Navigate to Profile screen -> anchored bottom ad banner is displayed on Profile screen too
         composeRule.onNodeWithTag("nav_profile").performClick()
         composeRule.waitUntil(timeoutMillis = 3_000L) {
             composeRule
@@ -524,7 +549,7 @@ class ExampleRobolectricTest {
         }
         composeRule.onNodeWithTag("profile_ad_banner").assertIsDisplayed()
 
-        // Disconnect internet completely and notify NetworkCallbacks -> ad banners disappear completely
+        // Disconnect internet -> banners hide immediately and Free Access enters offline mode without errors
         val offlineCaps = ShadowNetworkCapabilities.newInstance()
         shadowCm.setNetworkCapabilities(activeNetwork, offlineCaps)
         shadowCm.setDefaultNetworkActive(false)
@@ -541,14 +566,170 @@ class ExampleRobolectricTest {
                 .fetchSemanticsNodes()
                 .isEmpty()
         }
+        composeRule.onNodeWithTag("profile_screen_list")
+            .performScrollToNode(hasTestTag("profile_free_access_card"))
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("free_access_watch_ad_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("free_access_offline_note").assertIsDisplayed()
 
-        // Return to Home screen offline -> Home bottom banner stays hidden
         composeRule.onNodeWithTag("nav_home").performClick()
         composeRule.waitUntil(timeoutMillis = 3_000L) {
             composeRule
                 .onAllNodes(hasTestTag("home_ad_banner"))
                 .fetchSemanticsNodes()
                 .isEmpty()
+        }
+    }
+
+    @Test
+    fun `rewarded ads track 0 to 8 unlock 24h ad-free access persist and restore ads on expiry`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val app = ApplicationProvider.getApplicationContext<FazaApplication>()
+        val cm = context.getSystemService(ConnectivityManager::class.java)
+        val shadowCm = shadowOf(cm)
+
+        try {
+            kotlinx.coroutines.runBlocking {
+                app.preferencesRepository.setFreeAccessState(watchedCount = 0, expiresAtMs = 0L)
+            }
+
+            // Ensure online
+            val activeNetwork = cm.activeNetwork ?: org.robolectric.shadows.ShadowNetwork.newInstance(102)
+            val onlineCaps = ShadowNetworkCapabilities.newInstance()
+            shadowOf(onlineCaps).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            shadowCm.setNetworkCapabilities(activeNetwork, onlineCaps)
+            shadowCm.networkCallbacks.forEach { callback ->
+                callback.onAvailable(activeNetwork)
+                callback.onCapabilitiesChanged(activeNetwork, onlineCaps)
+            }
+
+            // Navigate to Profile & locate Free Access section
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("nav_profile").performClick()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("profile_screen_list")
+                .performScrollToNode(hasTestTag("profile_free_access_card"))
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithTag("free_access_section_title", useUnmergedTree = true)
+                .assertTextEquals("Free Access")
+            composeRule.onNodeWithTag("free_access_option_title", useUnmergedTree = true)
+                .assertTextEquals("Get 24 Hours Access")
+            composeRule.onNodeWithTag("free_access_watched_count", useUnmergedTree = true)
+                .assertTextEquals("Rewarded Ads Watched: 0/8")
+            composeRule.onNodeWithTag("free_access_remaining_ads", useUnmergedTree = true)
+                .assertTextEquals("Remaining Ads: 8")
+            composeRule.onNodeWithTag("free_access_progress_percent", useUnmergedTree = true)
+                .assertTextEquals("0%")
+            composeRule.onNodeWithTag("free_access_watch_ad_button").assertIsEnabled()
+
+            // 1. Skipped / dismissed early ad must NOT increment progress
+            com.example.ads.FazaAdsManager.testRewardedAdLauncher = { sessionId, callbacks ->
+                callbacks.onDismissedWithoutReward(sessionId)
+            }
+            composeRule.onNodeWithTag("free_access_watch_ad_button")
+                .performSemanticsAction(SemanticsActions.OnClick)
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("free_access_watched_count", useUnmergedTree = true)
+                .assertTextEquals("Rewarded Ads Watched: 0/8")
+            composeRule.onNodeWithTag("free_access_feedback_message", useUnmergedTree = true)
+                .assertTextEquals("Ad was closed early. Watch the full ad to count toward free access.")
+
+            // 2. Failed ad load must NOT increment progress
+            com.example.ads.FazaAdsManager.testRewardedAdLauncher = { sessionId, callbacks ->
+                callbacks.onFailed(sessionId, "Test ad unavailable")
+            }
+            composeRule.onNodeWithTag("free_access_watch_ad_button")
+                .performSemanticsAction(SemanticsActions.OnClick)
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("free_access_watched_count", useUnmergedTree = true)
+                .assertTextEquals("Rewarded Ads Watched: 0/8")
+            composeRule.onNodeWithTag("free_access_feedback_message", useUnmergedTree = true)
+                .assertTextEquals("Test ad unavailable")
+
+            // 3. Watch 3 valid ads (fire duplicate callback twice on each to prove deduplication)
+            com.example.ads.FazaAdsManager.testRewardedAdLauncher = { sessionId, callbacks ->
+                callbacks.onRewardEarned(sessionId)
+                callbacks.onRewardEarned(sessionId) // duplicate callback must be ignored
+            }
+            repeat(3) { step ->
+                composeRule.onNodeWithTag("free_access_watch_ad_button")
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                composeRule.waitUntil(timeoutMillis = 3_000L) {
+                    runBlocking {
+                        app.preferencesRepository.preferencesFlow.first().rewardedAdsWatchedCount == step + 1
+                    }
+                }
+                composeRule.waitForIdle()
+            }
+            composeRule.onNodeWithTag("free_access_watched_count", useUnmergedTree = true)
+                .assertTextEquals("Rewarded Ads Watched: 3/8")
+            composeRule.onNodeWithTag("free_access_remaining_ads", useUnmergedTree = true)
+                .assertTextEquals("Remaining Ads: 5")
+            composeRule.onNodeWithTag("free_access_progress_percent", useUnmergedTree = true)
+                .assertTextEquals("37.5%")
+
+            // 4. Watch remaining 5 ads (total 8/8) -> unlocks 24h access, resets progress to 0/8, hides banners
+            repeat(5) { step ->
+                composeRule.onNodeWithTag("free_access_watch_ad_button")
+                    .performSemanticsAction(SemanticsActions.OnClick)
+                val targetStep = step + 4
+                composeRule.waitUntil(timeoutMillis = 3_000L) {
+                    runBlocking {
+                        val prefs = app.preferencesRepository.preferencesFlow.first()
+                        if (targetStep < 8) {
+                            prefs.rewardedAdsWatchedCount == targetStep
+                        } else {
+                            prefs.freeAccessExpiresAtMs > System.currentTimeMillis() && prefs.rewardedAdsWatchedCount == 0
+                        }
+                    }
+                }
+                composeRule.waitForIdle()
+            }
+
+            composeRule.onNodeWithTag("free_access_activated_label", useUnmergedTree = true)
+                .assertIsDisplayed()
+                .assertTextEquals("Access Activated: 24 Hours")
+            composeRule.onNodeWithTag("free_access_remaining_time", useUnmergedTree = true)
+                .assertIsDisplayed()
+            composeRule.onNodeWithTag("free_access_feedback_message", useUnmergedTree = true)
+                .assertTextEquals(com.example.ads.FREE_ACCESS_CONGRATULATIONS_MESSAGE)
+
+            // Banner ads are hidden on Profile and Home while 24h access is active (even online)
+            composeRule.onNodeWithTag("profile_ad_banner").assertDoesNotExist()
+            composeRule.onNodeWithTag("nav_home").performClick()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("home_ad_banner").assertDoesNotExist()
+
+            // 5. Simulate expiration -> unlock option returns and banner ads resume when online
+            kotlinx.coroutines.runBlocking {
+                app.preferencesRepository.setFreeAccessState(
+                    watchedCount = 0,
+                    expiresAtMs = System.currentTimeMillis() - 60_000L
+                )
+            }
+            composeRule.waitUntil(timeoutMillis = 3_000L) {
+                composeRule
+                    .onAllNodes(hasTestTag("home_ad_banner"))
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            }
+            composeRule.onNodeWithTag("home_ad_banner").assertIsDisplayed()
+
+            composeRule.onNodeWithTag("nav_profile").performClick()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("profile_ad_banner").assertIsDisplayed()
+            composeRule.onNodeWithTag("profile_screen_list")
+                .performScrollToNode(hasTestTag("profile_free_access_card"))
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("free_access_expired_badge", useUnmergedTree = true).assertIsDisplayed()
+            composeRule.onNodeWithTag("free_access_option_title", useUnmergedTree = true)
+                .assertTextEquals("Get 24 Hours Access")
+        } finally {
+            com.example.ads.FazaAdsManager.testRewardedAdLauncher = null
+            kotlinx.coroutines.runBlocking {
+                app.preferencesRepository.setFreeAccessState(watchedCount = 0, expiresAtMs = 0L)
+            }
         }
     }
 
@@ -673,5 +854,90 @@ class ExampleRobolectricTest {
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
+    }
+
+    @Test
+    fun `favorites tab allows bookmarking managing and quickly accessing preferred videos`() {
+        val app = ApplicationProvider.getApplicationContext<FazaApplication>()
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("nav_favorites").assertIsDisplayed().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("favorites_empty_state").assertIsDisplayed()
+        composeRule.onNodeWithTag("favorites_browse_folders_button").assertIsDisplayed()
+
+        // Insert a public video and a private favorited video
+        val publicVideoId = kotlinx.coroutines.runBlocking {
+            app.database.videoDao().insertVideo(
+                com.example.data.model.VideoItem(
+                    uri = "content://media/external/video/media/950",
+                    title = "Favorite Concert 4K.mp4",
+                    folderName = "Concerts",
+                    durationMs = 240_000L,
+                    sizeBytes = 64L * 1024L * 1024L,
+                    isFavourite = false,
+                    isPrivate = false
+                )
+            )
+        }
+        val privateVideoId = kotlinx.coroutines.runBlocking {
+            app.database.videoDao().insertVideo(
+                com.example.data.model.VideoItem(
+                    uri = "content://media/external/video/media/951",
+                    title = "Private Clip.mp4",
+                    folderName = "Vault",
+                    durationMs = 60_000L,
+                    isFavourite = true,
+                    isPrivate = true
+                )
+            )
+        }
+
+        // Empty state still holds (private video excluded) and now offers quick-add CTA
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            composeRule
+                .onAllNodes(hasTestTag("favorites_empty_add_button"))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("video_card_$privateVideoId").assertDoesNotExist()
+
+        // Open Manage Favorites sheet and bookmark the public video
+        composeRule.onNodeWithTag("favorites_empty_add_button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            composeRule
+                .onAllNodes(hasTestTag("favorites_picker_toggle_$publicVideoId"))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("favorites_picker_toggle_$publicVideoId")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("favorites_picker_done_button")
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        // Bookmarked video appears in the Favorites tab with summary card and Play action
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            composeRule
+                .onAllNodes(hasTestTag("video_card_$publicVideoId"))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("favorites_video_list").assertIsDisplayed()
+        composeRule.onNodeWithTag("favorites_summary_card").assertIsDisplayed()
+        composeRule.onNodeWithTag("favorites_play_first_button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("video_card_$publicVideoId").assertIsDisplayed()
+        composeRule.onNodeWithTag("video_card_$privateVideoId").assertDoesNotExist()
+
+        // Unbookmarking directly from Favorites removes the item and restores empty state
+        composeRule.onNodeWithTag("fav_button_$publicVideoId")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            composeRule
+                .onAllNodes(hasTestTag("favorites_empty_state"))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("favorites_empty_state").assertIsDisplayed()
     }
 }

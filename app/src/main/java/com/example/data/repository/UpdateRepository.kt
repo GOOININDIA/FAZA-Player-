@@ -42,9 +42,9 @@ class UpdateRepository {
         releaseDate = "November 2026",
         summary = "What's New – v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) by Gooin India Pvt Ltd.",
         newFeatures = listOf(
-            "Complete Material You Expressive redesign across Home folders, Search, Profile, Settings, Updates, Dialogs, and Player sheets.",
+            "New Favorites tab in the main navigation bar to bookmark, sort, manage, and quickly play your preferred video files.",
+            "Complete Material You Expressive redesign across Home folders, Favorites, Search, Profile, Settings, Updates, Dialogs, and Player sheets.",
             "Replaced legacy glass borders and gradients with clean borderless tonal containers, 24–28dp rounded shapes, and full-pill buttons & chips.",
-            "First-launch media access screen and update dialogs now adapt automatically to your wallpaper Material You color palette.",
             "Responsive spring bounce animations across the navigation dock, folder cards, theme tiles, and rounded FAZA UI player controls."
         ),
         performanceImprovements = listOf(

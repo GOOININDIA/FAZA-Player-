@@ -16,6 +16,9 @@ sealed interface FazaRoute {
     data object Updates : FazaRoute
 
     @Serializable
+    data object Favorites : FazaRoute
+
+    @Serializable
     data object Profile : FazaRoute
 
     @Serializable

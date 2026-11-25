@@ -1,5 +1,6 @@
 package com.example.ads
 
+import android.app.Activity
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -12,7 +13,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,121 +28,147 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "FazaAdsManager"
 
+interface RewardedAdCallbacks {
+    fun onLoadingChanged(isLoading: Boolean)
+    fun onRewardEarned(sessionId: String)
+    fun onDismissedWithoutReward(sessionId: String)
+    fun onFailed(sessionId: String, reason: String)
+    fun onOfflineBlocked(sessionId: String)
+}
+
 object FazaAdsManager {
 
-    const val GOOGLE_TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
-    const val GOOGLE_TEST_BANNER_UNIT_ID = "ca-app-pub-3940256099942544/9214589741"
-    const val DEFAULT_ADMOB_APP_ID = "ca-app-pub-6572024129453689~5808434174"
-    const val DEFAULT_ADMOB_BANNER_UNIT_ID = "ca-app-pub-6572024129453689/1854846916"
+    // Official FAZA Player production AdMob credentials (used in release builds)
+    const val PRODUCTION_ADMOB_APP_ID = "ca-app-pub-6572024129453689~5808434174"
+    const val PRODUCTION_BANNER_AD_UNIT_ID = "ca-app-pub-6572024129453689/7809859094"
+    const val PRODUCTION_REWARDED_AD_UNIT_ID = "ca-app-pub-6572024129453689/8759531574"
+
+    // Official Google AdMob test ad unit IDs (used in debug/development builds per AdMob policy)
+    const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
+    const val TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
 
     private val initialized = AtomicBoolean(false)
+    private val rewardedRequestInFlight = AtomicBoolean(false)
     private val initScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun isRobolectricRuntime(): Boolean =
-        "robolectric".equals(Build.FINGERPRINT, ignoreCase = true)
+    /**
+     * Test-only hook allowing JVM/Robolectric tests to deterministically exercise
+     * rewarded ad completion, dismissal, duplicate callbacks, and failure paths.
+     */
+    @Volatile
+    internal var testRewardedAdLauncher: ((sessionId: String, callbacks: RewardedAdCallbacks) -> Unit)? = null
+
+    fun isUsingTestAdIds(): Boolean = BuildConfig.USE_TEST_ADS
 
     fun resolveAppId(): String =
-        BuildConfig.ADMOB_APP_ID.trim().ifBlank { DEFAULT_ADMOB_APP_ID }
+        BuildConfig.ADMOB_APP_ID.trim().ifBlank { PRODUCTION_ADMOB_APP_ID }
 
-    fun resolveBannerAdUnitId(): String =
-        BuildConfig.ADMOB_BANNER_UNIT_ID.trim().ifBlank { DEFAULT_ADMOB_BANNER_UNIT_ID }
+    fun resolveBannerAdUnitId(useTestAds: Boolean = isUsingTestAdIds()): String {
+        if (useTestAds) return TEST_BANNER_AD_UNIT_ID
+        return BuildConfig.ADMOB_BANNER_AD_UNIT_ID
+            .trim()
+            .takeUnless { it.isBlank() || it == TEST_BANNER_AD_UNIT_ID }
+            ?: PRODUCTION_BANNER_AD_UNIT_ID
+    }
 
-    fun isUsingTestAdIds(): Boolean {
-        val unitId = resolveBannerAdUnitId()
-        val appId = resolveAppId()
-        return unitId == GOOGLE_TEST_BANNER_UNIT_ID || appId == GOOGLE_TEST_APP_ID
+    fun resolveRewardedAdUnitId(useTestAds: Boolean = isUsingTestAdIds()): String {
+        if (useTestAds) return TEST_REWARDED_AD_UNIT_ID
+        return BuildConfig.ADMOB_REWARDED_AD_UNIT_ID
+            .trim()
+            .takeUnless { it.isBlank() || it == TEST_REWARDED_AD_UNIT_ID }
+            ?: PRODUCTION_REWARDED_AD_UNIT_ID
+    }
+
+    fun isRobolectricRuntime(): Boolean {
+        return Build.FINGERPRINT.equals("robolectric", ignoreCase = true) ||
+            Build.MODEL.contains("robolectric", ignoreCase = true)
     }
 
     internal fun hasValidatedInternetCapability(
         hasInternet: Boolean,
         hasValidated: Boolean,
-        isRobolectric: Boolean = isRobolectricRuntime()
+        isRobolectric: Boolean
     ): Boolean {
         if (!hasInternet) return false
         return if (isRobolectric) true else hasValidated
     }
 
     fun isInternetConnected(context: Context): Boolean {
-        val appContext = context.applicationContext
         return runCatching {
-            val connectivityManager = appContext.getSystemService(ConnectivityManager::class.java)
-                ?: return@runCatching false
-            val activeNetwork = connectivityManager.activeNetwork ?: return@runCatching false
-            val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
-                ?: return@runCatching false
-            val hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            val hasValidated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return false
+            val activeNetwork = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
+            val hasInternet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            val hasValidated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             hasValidatedInternetCapability(
                 hasInternet = hasInternet,
-                hasValidated = hasValidated
+                hasValidated = hasValidated,
+                isRobolectric = isRobolectricRuntime()
             )
         }.getOrDefault(false)
     }
 
-    fun observeInternetConnectivity(context: Context): Flow<Boolean> {
+    fun observeInternetConnectivity(context: Context): Flow<Boolean> = callbackFlow {
         val appContext = context.applicationContext
-        return callbackFlow {
+        val cm = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+
+        fun emitCurrent() {
             trySend(isInternetConnected(appContext))
+        }
 
-            val connectivityManager = runCatching {
-                appContext.getSystemService(ConnectivityManager::class.java)
-            }.getOrNull()
+        emitCurrent()
 
-            if (connectivityManager == null) {
-                awaitClose { }
-                return@callbackFlow
+        if (cm == null) {
+            awaitClose {}
+            return@callbackFlow
+        }
+
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                emitCurrent()
             }
 
-            val callback = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) {
-                    trySend(isInternetConnected(appContext))
-                }
-
-                override fun onLost(network: Network) {
-                    trySend(isInternetConnected(appContext))
-                }
-
-                override fun onUnavailable() {
-                    trySend(false)
-                }
-
-                override fun onCapabilitiesChanged(
-                    network: Network,
-                    networkCapabilities: NetworkCapabilities
-                ) {
-                    val active = connectivityManager.activeNetwork
-                    if (active == null || active == network) {
-                        val connected = hasValidatedInternetCapability(
-                            hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
-                            hasValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                        )
-                        trySend(connected)
-                    } else {
-                        trySend(isInternetConnected(appContext))
-                    }
-                }
+            override fun onLost(network: Network) {
+                emitCurrent()
             }
 
-            val registered = runCatching {
-                connectivityManager.registerDefaultNetworkCallback(callback)
-                true
-            }.getOrDefault(false)
-
-            awaitClose {
-                if (registered) {
-                    runCatching { connectivityManager.unregisterNetworkCallback(callback) }
-                }
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities
+            ) {
+                emitCurrent()
             }
-        }.distinctUntilChanged()
-    }
 
-    fun initialize(context: Context) {
-        if (isRobolectricRuntime()) return
+            override fun onUnavailable() {
+                trySend(false)
+            }
+        }
+
+        val registered = runCatching {
+            cm.registerDefaultNetworkCallback(callback)
+            true
+        }.getOrDefault(false)
+
+        awaitClose {
+            if (registered) {
+                runCatching { cm.unregisterNetworkCallback(callback) }
+            }
+        }
+    }.distinctUntilChanged()
+
+    /**
+     * Initializes the Google Mobile Ads SDK asynchronously ONLY when online.
+     * Never performs background initialization while offline or in Robolectric tests.
+     */
+    fun ensureInitializedAsync(context: Context) {
         if (!isInternetConnected(context)) return
+        if (isRobolectricRuntime()) return
         if (!initialized.compareAndSet(false, true)) return
 
         val appContext = context.applicationContext
@@ -149,21 +182,127 @@ object FazaAdsManager {
                 }
             }.onFailure { error ->
                 initialized.set(false)
-                Log.e(TAG, "Failed to initialize Google Mobile Ads SDK", error)
+                Log.w(TAG, "MobileAds initialization skipped: ${error.localizedMessage}")
             }
+        }
+    }
+
+    /**
+     * Loads and immediately shows a Google AdMob Rewarded Ad upon explicit user request.
+     * - Uses Google test unit ID in debug builds and official FAZA Player unit ID in release builds.
+     * - Never requests ads offline.
+     * - Prevents duplicate concurrent ad requests and Activity memory leaks.
+     * - Counts reward strictly when Google AdMob invokes onUserEarnedReward (at most once per show).
+     */
+    fun loadAndShowRewardedAd(
+        activity: Activity,
+        sessionId: String,
+        callbacks: RewardedAdCallbacks
+    ) {
+        if (!isInternetConnected(activity)) {
+            callbacks.onLoadingChanged(false)
+            callbacks.onOfflineBlocked(sessionId)
+            return
+        }
+
+        testRewardedAdLauncher?.let { launcher ->
+            launcher(sessionId, callbacks)
+            return
+        }
+
+        if (isRobolectricRuntime()) {
+            callbacks.onLoadingChanged(false)
+            callbacks.onFailed(sessionId, "Rewarded ads require an Android device runtime.")
+            return
+        }
+
+        if (!rewardedRequestInFlight.compareAndSet(false, true)) {
+            return
+        }
+
+        ensureInitializedAsync(activity)
+        callbacks.onLoadingChanged(true)
+
+        val activityRef = WeakReference(activity)
+        val appContext = activity.applicationContext
+        val rewardedUnitId = resolveRewardedAdUnitId()
+        val adRequest = AdRequest.Builder().build()
+
+        runCatching {
+            RewardedAd.load(
+                appContext,
+                rewardedUnitId,
+                adRequest,
+                object : RewardedAdLoadCallback() {
+                    override fun onAdLoaded(rewardedAd: RewardedAd) {
+                        callbacks.onLoadingChanged(false)
+                        val hostActivity = activityRef.get()
+                        if (hostActivity == null || hostActivity.isFinishing || hostActivity.isDestroyed) {
+                            rewardedRequestInFlight.set(false)
+                            callbacks.onDismissedWithoutReward(sessionId)
+                            return
+                        }
+
+                        val earnedThisShow = AtomicBoolean(false)
+                        rewardedAd.fullScreenContentCallback = object : FullScreenContentCallback() {
+                            override fun onAdDismissedFullScreenContent() {
+                                rewardedAd.fullScreenContentCallback = null
+                                rewardedRequestInFlight.set(false)
+                                if (!earnedThisShow.get()) {
+                                    callbacks.onDismissedWithoutReward(sessionId)
+                                }
+                            }
+
+                            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                                rewardedAd.fullScreenContentCallback = null
+                                rewardedRequestInFlight.set(false)
+                                Log.w(TAG, "Rewarded ad failed to show: ${adError.message}")
+                                callbacks.onFailed(
+                                    sessionId,
+                                    "Could not display rewarded ad right now. Please try again."
+                                )
+                            }
+                        }
+
+                        rewardedAd.show(hostActivity) { _ ->
+                            if (earnedThisShow.compareAndSet(false, true)) {
+                                callbacks.onRewardEarned(sessionId)
+                            }
+                        }
+                    }
+
+                    override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                        rewardedRequestInFlight.set(false)
+                        callbacks.onLoadingChanged(false)
+                        Log.w(TAG, "Rewarded ad failed to load: ${loadAdError.message}")
+                        callbacks.onFailed(
+                            sessionId,
+                            "Rewarded ad could not load right now. Please try again."
+                        )
+                    }
+                }
+            )
+        }.onFailure { error ->
+            rewardedRequestInFlight.set(false)
+            callbacks.onLoadingChanged(false)
+            Log.w(TAG, "Rewarded ad exception: ${error.localizedMessage}")
+            callbacks.onFailed(
+                sessionId,
+                "Unable to load rewarded ad right now. Please try again."
+            )
         }
     }
 }
 
 @Composable
 fun rememberIsInternetConnected(): Boolean {
-    val context = LocalContext.current.applicationContext
-    val connectivityFlow = remember(context) {
+    val context = LocalContext.current
+    val flow = remember(context) {
         FazaAdsManager.observeInternetConnectivity(context)
     }
-    val initialConnected = remember(context) {
+    val initialValue = remember(context) {
         FazaAdsManager.isInternetConnected(context)
     }
-    val isConnected by connectivityFlow.collectAsStateWithLifecycle(initialValue = initialConnected)
-    return isConnected
+    val connected by flow.collectAsStateWithLifecycle(initialValue = initialValue)
+    return connected
 }

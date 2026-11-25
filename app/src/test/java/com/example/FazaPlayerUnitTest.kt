@@ -1231,46 +1231,6 @@ class FazaPlayerUnitTest {
     }
 
     @Test
-    fun fazaAdsManager_resolvesConfiguredProductionAdMobIds() {
-        assertEquals(
-            "ca-app-pub-6572024129453689~5808434174",
-            com.example.ads.FazaAdsManager.resolveAppId()
-        )
-        assertEquals(
-            "ca-app-pub-6572024129453689/1854846916",
-            com.example.ads.FazaAdsManager.resolveBannerAdUnitId()
-        )
-        assertFalse(com.example.ads.FazaAdsManager.isUsingTestAdIds())
-    }
-
-    @Test
-    fun fazaAdsManager_requiresValidatedInternetOnDevicesAndHidesOffline() {
-        assertTrue(
-            com.example.ads.FazaAdsManager.hasValidatedInternetCapability(
-                hasInternet = true,
-                hasValidated = true,
-                isRobolectric = false
-            )
-        )
-        // Offline -> never show ads
-        assertFalse(
-            com.example.ads.FazaAdsManager.hasValidatedInternetCapability(
-                hasInternet = false,
-                hasValidated = false,
-                isRobolectric = false
-            )
-        )
-        // Captive portal / unvalidated connection on real Android device -> hide ads
-        assertFalse(
-            com.example.ads.FazaAdsManager.hasValidatedInternetCapability(
-                hasInternet = true,
-                hasValidated = false,
-                isRobolectric = false
-            )
-        )
-    }
-
-    @Test
     fun adaptiveLayoutSpec_adjustsBreakpointsColumnsAndPaneModePerDevice() {
         // Ultra-compact portrait phone (320 x 568 dp)
         val ultraCompact = com.example.ui.adaptive.calculateAdaptiveLayoutSpec(
@@ -1696,6 +1656,283 @@ class FazaPlayerUnitTest {
         assertEquals("5.1", com.example.player.formatAudioChannelLayout(6))
         assertEquals("7.1", com.example.player.formatAudioChannelLayout(8))
         assertEquals("4ch", com.example.player.formatAudioChannelLayout(4))
+    }
+
+    @Test
+    fun floatingNavigationDockPalette_enforcesConsistentPurpleActiveAndMediumGreyInactiveColors() {
+        val lightPalette = com.example.ui.components.resolveFloatingDockPalette(
+            isDark = false,
+            badgeContainerColor = androidx.compose.ui.graphics.Color.Red,
+            badgeContentColor = androidx.compose.ui.graphics.Color.White
+        )
+        // Light mode: pure white surface, subtle light-grey border, consistent purple active pill, crisp white active icon,
+        // and search icon uses the exact same medium-grey colour as inactive navigation icons
+        assertEquals(com.example.ui.theme.FazaNavSurfaceLight, lightPalette.dockBackground)
+        assertEquals(com.example.ui.theme.FazaNavSurfaceLight, lightPalette.searchBackground)
+        assertEquals(androidx.compose.ui.graphics.Color.White, lightPalette.dockBackground)
+        assertEquals(com.example.ui.theme.FazaNavBorderLight, lightPalette.dockBorderStart)
+        assertEquals(com.example.ui.theme.FazaNavBorderLight, lightPalette.searchBorderStart)
+        assertEquals(com.example.ui.theme.FazaNavActivePurpleLight, lightPalette.activeCapsuleColor)
+        assertEquals(com.example.ui.theme.FazaNavOnActivePurple, lightPalette.activeContentColor)
+        assertEquals(com.example.ui.theme.FazaNavInactiveLight, lightPalette.inactiveIconColor)
+        assertEquals(lightPalette.inactiveIconColor, lightPalette.searchIconColor)
+        assertNotEquals(lightPalette.activeCapsuleColor, lightPalette.activeContentColor)
+        assertNotEquals(androidx.compose.ui.graphics.Color.Black, lightPalette.searchIconColor)
+
+        val darkPalette = com.example.ui.components.resolveFloatingDockPalette(
+            isDark = true,
+            badgeContainerColor = androidx.compose.ui.graphics.Color.Red,
+            badgeContentColor = androidx.compose.ui.graphics.Color.White
+        )
+        assertEquals(com.example.ui.theme.FazaNavSurfaceDark, darkPalette.dockBackground)
+        assertEquals(com.example.ui.theme.FazaNavBorderDark, darkPalette.dockBorderStart)
+        assertEquals(com.example.ui.theme.FazaNavActivePurpleDark, darkPalette.activeCapsuleColor)
+        assertEquals(com.example.ui.theme.FazaNavOnActivePurple, darkPalette.activeContentColor)
+        assertEquals(com.example.ui.theme.FazaNavInactiveDark, darkPalette.inactiveIconColor)
+        assertEquals(darkPalette.inactiveIconColor, darkPalette.searchIconColor)
+    }
+
+    @Test
+    fun fazaAdsManager_resolvesOfficialProductionIdsForReleaseAndTestIdsForDebug() {
+        // Official FAZA Player AdMob App ID
+        assertEquals(
+            "ca-app-pub-6572024129453689~5808434174",
+            com.example.ads.FazaAdsManager.resolveAppId()
+        )
+        // Debug builds use official Google test ad units per AdMob policy
+        assertTrue(com.example.ads.FazaAdsManager.isUsingTestAdIds())
+        assertEquals(
+            "ca-app-pub-3940256099942544/6300978111",
+            com.example.ads.FazaAdsManager.resolveBannerAdUnitId(useTestAds = true)
+        )
+        assertEquals(
+            "ca-app-pub-3940256099942544/5224354917",
+            com.example.ads.FazaAdsManager.resolveRewardedAdUnitId(useTestAds = true)
+        )
+        // Release builds switch to official FAZA Player production Banner & Rewarded ad units
+        assertEquals(
+            "ca-app-pub-6572024129453689/7809859094",
+            com.example.ads.FazaAdsManager.resolveBannerAdUnitId(useTestAds = false)
+        )
+        assertEquals(
+            "ca-app-pub-6572024129453689/8759531574",
+            com.example.ads.FazaAdsManager.resolveRewardedAdUnitId(useTestAds = false)
+        )
+
+        // Validated internet required on Android devices; offline/captive portal hides ads
+        assertTrue(
+            com.example.ads.FazaAdsManager.hasValidatedInternetCapability(
+                hasInternet = true,
+                hasValidated = true,
+                isRobolectric = false
+            )
+        )
+        assertFalse(
+            com.example.ads.FazaAdsManager.hasValidatedInternetCapability(
+                hasInternet = false,
+                hasValidated = false,
+                isRobolectric = false
+            )
+        )
+        assertFalse(
+            com.example.ads.FazaAdsManager.hasValidatedInternetCapability(
+                hasInternet = true,
+                hasValidated = false,
+                isRobolectric = false
+            )
+        )
+    }
+
+    @Test
+    fun adFreeAccessPolicy_tracksEightRewardedAdsAndUnlocks24HourAccessOnEighth() {
+        val baseNow = 1_700_000_000_000L
+        var watched = 0
+        var expiresAt = 0L
+
+        for (step in 1..7) {
+            val res = com.example.ads.AdFreeAccessPolicy.applyCompletedReward(
+                currentWatchedCount = watched,
+                currentExpiresAtMs = expiresAt,
+                nowMs = baseNow
+            )
+            assertFalse("Timer must not start before 8 valid rewards (step=$step)", res.unlocked24HourAccess)
+            assertEquals(step, res.newWatchedCount)
+            assertEquals(8 - step, res.remainingAds)
+            assertEquals(0L, res.newExpiresAtMs)
+            watched = res.newWatchedCount
+            expiresAt = res.newExpiresAtMs
+        }
+
+        // Verify 3/8 formatting matches 37.5% & 5 remaining
+        val statusAtThree = com.example.ads.AdFreeAccessPolicy.resolveStatus(
+            watchedCount = 3,
+            expiresAtMs = 0L,
+            nowMs = baseNow
+        )
+        assertEquals(3, statusAtThree.clampedWatchedCount)
+        assertEquals(5, statusAtThree.remainingAds)
+        assertEquals("37.5%", statusAtThree.progressPercentText)
+        assertEquals(0.375f, statusAtThree.progressFraction, 0.0001f)
+        assertFalse(statusAtThree.isActive)
+
+        // 8th valid reward unlocks 24h access and resets watched count to 0/8
+        val unlockResult = com.example.ads.AdFreeAccessPolicy.applyCompletedReward(
+            currentWatchedCount = watched,
+            currentExpiresAtMs = expiresAt,
+            nowMs = baseNow
+        )
+        assertTrue(unlockResult.unlocked24HourAccess)
+        assertEquals(0, unlockResult.newWatchedCount)
+        assertEquals(baseNow + com.example.ads.FREE_ACCESS_DURATION_MS, unlockResult.newExpiresAtMs)
+
+        // Active status 1 minute after unlock shows 23h 59m remaining and hides all ads
+        val activeStatus = com.example.ads.AdFreeAccessPolicy.resolveStatus(
+            watchedCount = unlockResult.newWatchedCount,
+            expiresAtMs = unlockResult.newExpiresAtMs,
+            nowMs = baseNow + 60_000L
+        )
+        assertTrue(activeStatus.isActive)
+        assertFalse(activeStatus.isExpired)
+        assertEquals("23h 59m", activeStatus.remainingTimeText)
+        assertFalse(
+            com.example.ads.AdFreeAccessPolicy.shouldShowBannerAds(
+                isOnline = true,
+                expiresAtMs = unlockResult.newExpiresAtMs,
+                nowMs = baseNow + 60_000L
+            )
+        )
+        assertFalse(
+            com.example.ads.AdFreeAccessPolicy.shouldAllowRewardedAdRequest(
+                isOnline = true,
+                expiresAtMs = unlockResult.newExpiresAtMs,
+                nowMs = baseNow + 60_000L
+            )
+        )
+
+        // Offline always hides banner ads and blocks rewarded requests even without free access
+        assertFalse(
+            com.example.ads.AdFreeAccessPolicy.shouldShowBannerAds(
+                isOnline = false,
+                expiresAtMs = 0L,
+                nowMs = baseNow
+            )
+        )
+        assertFalse(
+            com.example.ads.AdFreeAccessPolicy.shouldAllowRewardedAdRequest(
+                isOnline = false,
+                expiresAtMs = 0L,
+                nowMs = baseNow
+            )
+        )
+
+        // After 24 hours expire, status is expired and ads return when online
+        val afterExpiryNow = unlockResult.newExpiresAtMs + 1_000L
+        val expiredStatus = com.example.ads.AdFreeAccessPolicy.resolveStatus(
+            watchedCount = 0,
+            expiresAtMs = unlockResult.newExpiresAtMs,
+            nowMs = afterExpiryNow
+        )
+        assertFalse(expiredStatus.isActive)
+        assertTrue(expiredStatus.isExpired)
+        assertEquals("0h 00m", expiredStatus.remainingTimeText)
+        assertTrue(
+            com.example.ads.AdFreeAccessPolicy.shouldShowBannerAds(
+                isOnline = true,
+                expiresAtMs = unlockResult.newExpiresAtMs,
+                nowMs = afterExpiryNow
+            )
+        )
+        assertTrue(
+            com.example.ads.AdFreeAccessPolicy.shouldAllowRewardedAdRequest(
+                isOnline = true,
+                expiresAtMs = unlockResult.newExpiresAtMs,
+                nowMs = afterExpiryNow
+            )
+        )
+    }
+
+    @Test
+    fun rewardSessionGuard_preventsDuplicateAndStaleRewardClaims() {
+        val guard = com.example.ads.RewardSessionGuard()
+        val session1 = guard.startNewSession()
+
+        // First claim succeeds, duplicate callback on same session is rejected
+        assertTrue(guard.tryClaimReward(session1))
+        assertFalse(guard.tryClaimReward(session1))
+        assertTrue(guard.hasClaimedReward(session1))
+        guard.finishSession(session1)
+        assertFalse(guard.tryClaimReward(session1))
+
+        // Dismissed/failed session cannot be claimed later
+        val session2 = guard.startNewSession()
+        guard.finishSession(session2)
+        assertFalse(guard.tryClaimReward(session2))
+        assertFalse(guard.hasClaimedReward(session2))
+
+        // Blank or unknown session ID is always rejected
+        assertFalse(guard.tryClaimReward(""))
+        assertFalse(guard.tryClaimReward("unknown-session"))
+    }
+
+    @Test
+    fun selectFavoriteVideos_filtersNonPrivateFavouritesDeduplicatesAndSorts() {
+        val favLong = VideoItem(
+            id = 1L,
+            uri = "content://media/external/video/media/10",
+            title = "Zeta Show",
+            folderName = "Movies",
+            durationMs = 500_000L,
+            dateAdded = 1_000L,
+            isFavourite = true,
+            isPrivate = false
+        )
+        val favShort = VideoItem(
+            id = 2L,
+            uri = "content://media/external/video/media/11",
+            title = "Alpha Clip",
+            folderName = "Camera",
+            durationMs = 60_000L,
+            dateAdded = 2_000L,
+            isFavourite = true,
+            isPrivate = false
+        )
+        val nonFav = VideoItem(
+            id = 3L,
+            uri = "content://media/external/video/media/12",
+            title = "Regular Video",
+            folderName = "Camera",
+            durationMs = 90_000L,
+            isFavourite = false,
+            isPrivate = false
+        )
+        val privateFav = VideoItem(
+            id = 4L,
+            uri = "content://media/external/video/media/13",
+            title = "Vault Secret",
+            folderName = "Vault",
+            durationMs = 90_000L,
+            isFavourite = true,
+            isPrivate = true
+        )
+
+        val byName = com.example.ui.screens.selectFavoriteVideos(
+            allPublicVideos = listOf(favLong, favShort, nonFav, privateFav),
+            sortOption = SortOption.NAME_ASC
+        )
+        assertEquals(listOf(2L, 1L), byName.map { it.id })
+
+        val byDuration = com.example.ui.screens.selectFavoriteVideos(
+            allPublicVideos = listOf(favLong, favShort, nonFav, privateFav),
+            sortOption = SortOption.DURATION_DESC
+        )
+        assertEquals(listOf(1L, 2L), byDuration.map { it.id })
+
+        assertTrue(
+            com.example.ui.screens.selectFavoriteVideos(
+                allPublicVideos = listOf(nonFav, privateFav),
+                sortOption = SortOption.DATE_ADDED_DESC
+            ).isEmpty()
+        )
     }
 }
 

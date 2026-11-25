@@ -40,6 +40,9 @@ import com.example.data.model.SortOption
 import com.example.data.model.SubtitleEdgeStyle
 import com.example.data.model.SubtitleStyleConfig
 import com.example.data.model.ThemeMode
+import com.example.ads.AdFreeAccessPolicy
+import com.example.ads.REQUIRED_REWARDED_ADS
+import com.example.ads.RewardCompletionResult
 import com.example.data.model.UserPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -140,6 +143,8 @@ class UserPreferencesRepository(private val context: Context) {
         val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
         val LAST_SEEN_UPDATE_VERSION_CODE = intPreferencesKey("last_seen_update_version_code")
         val UPDATE_MANIFEST_URL = stringPreferencesKey("update_manifest_url")
+        val FREE_ACCESS_EXPIRES_AT_MS = longPreferencesKey("free_access_expires_at_ms")
+        val REWARDED_ADS_WATCHED_COUNT = intPreferencesKey("rewarded_ads_watched_count")
     }
 
     val preferencesFlow: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -337,7 +342,10 @@ class UserPreferencesRepository(private val context: Context) {
             lastSeenUpdateVersionCode = prefs[Keys.LAST_SEEN_UPDATE_VERSION_CODE] ?: 0,
             updateManifestUrl = prefs[Keys.UPDATE_MANIFEST_URL]
                 ?.takeUnless { it.isBlank() || it == UserPreferences.LEGACY_UPDATE_MANIFEST_URL }
-                ?: UserPreferences.DEFAULT_UPDATE_MANIFEST_URL
+                ?: UserPreferences.DEFAULT_UPDATE_MANIFEST_URL,
+            freeAccessExpiresAtMs = (prefs[Keys.FREE_ACCESS_EXPIRES_AT_MS] ?: 0L).coerceAtLeast(0L),
+            rewardedAdsWatchedCount = (prefs[Keys.REWARDED_ADS_WATCHED_COUNT] ?: 0)
+                .coerceIn(0, REQUIRED_REWARDED_ADS)
         )
     }
 
@@ -536,6 +544,42 @@ class UserPreferencesRepository(private val context: Context) {
             } else {
                 it[Keys.UPDATE_MANIFEST_URL] = trimmed
             }
+        }
+    }
+
+    /**
+     * Atomically records one verified rewarded-ad completion in DataStore so progress
+     * and the 24-hour expiration timestamp survive app restarts and device reboots.
+     */
+    suspend fun recordCompletedRewardedAd(
+        nowMs: Long = System.currentTimeMillis()
+    ): RewardCompletionResult {
+        var result: RewardCompletionResult? = null
+        context.dataStore.edit { prefs ->
+            val currentWatched = (prefs[Keys.REWARDED_ADS_WATCHED_COUNT] ?: 0)
+                .coerceIn(0, REQUIRED_REWARDED_ADS)
+            val currentExpires = (prefs[Keys.FREE_ACCESS_EXPIRES_AT_MS] ?: 0L).coerceAtLeast(0L)
+            val transition = AdFreeAccessPolicy.applyCompletedReward(
+                currentWatchedCount = currentWatched,
+                currentExpiresAtMs = currentExpires,
+                nowMs = nowMs
+            )
+            prefs[Keys.REWARDED_ADS_WATCHED_COUNT] = transition.newWatchedCount
+            if (transition.unlocked24HourAccess) {
+                prefs[Keys.FREE_ACCESS_EXPIRES_AT_MS] = transition.newExpiresAtMs
+            } else if (!transition.wasAlreadyActive && currentExpires in 1L..nowMs) {
+                // Previous access expired; keep clean state while progressing toward a fresh unlock
+                prefs[Keys.FREE_ACCESS_EXPIRES_AT_MS] = 0L
+            }
+            result = transition
+        }
+        return requireNotNull(result)
+    }
+
+    suspend fun setFreeAccessState(watchedCount: Int, expiresAtMs: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.REWARDED_ADS_WATCHED_COUNT] = watchedCount.coerceIn(0, REQUIRED_REWARDED_ADS)
+            prefs[Keys.FREE_ACCESS_EXPIRES_AT_MS] = expiresAtMs.coerceAtLeast(0L)
         }
     }
 }

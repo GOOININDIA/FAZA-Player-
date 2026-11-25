@@ -48,7 +48,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.ads.rememberIsInternetConnected
 import com.example.ui.viewmodel.MID_VIDEO_BREAK_DURATION_SEC
 import com.example.util.Formatters
 
@@ -67,7 +66,6 @@ fun MidVideoBreakOverlay(
     val elapsedProgress = (MID_VIDEO_BREAK_DURATION_SEC - clampedRemaining).toFloat() /
         MID_VIDEO_BREAK_DURATION_SEC.toFloat()
     val scrimInteraction = remember { MutableInteractionSource() }
-    val isInternetConnected = rememberIsInternetConnected()
 
     BoxWithConstraints(
         modifier = modifier
@@ -191,10 +189,6 @@ fun MidVideoBreakOverlay(
                         .height(6.dp)
                         .clip(RoundedCornerShape(999.dp))
                 )
-
-                if (!isShortViewport && isInternetConnected) {
-                    FazaAdBannerCard(testTag = "player_break_ad_banner")
-                }
 
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),

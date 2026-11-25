@@ -1,5 +1,8 @@
 package com.example
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
@@ -25,9 +28,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
@@ -60,7 +65,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
-import com.example.ads.FazaAdsManager
+import com.example.ads.AdFreeAccessPolicy
 import com.example.ads.rememberIsInternetConnected
 import com.example.ai.LibraryContextSummary
 import com.example.ai.configureAppCheck
@@ -77,6 +82,7 @@ import com.example.ui.components.selectAutoResumeVideo
 import com.example.ui.components.selectContinuePlayingVideo
 import com.example.ui.components.selectLastPlayedVideo
 import com.example.ui.navigation.FazaRoute
+import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.FolderDetailScreen
 import com.example.ui.screens.FoldersScreen
 import com.example.ui.screens.PlayerScreen
@@ -84,7 +90,9 @@ import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SettingsAndAboutScreen
 import com.example.ui.screens.UpdatesScreen
+import com.example.ui.screens.selectFavoriteVideos
 import com.example.ui.theme.FazaPlayerTheme
+import com.example.ui.viewmodel.AdFreeAccessViewModel
 import com.example.ui.viewmodel.LibraryViewModel
 import com.example.ui.viewmodel.PlayerViewModel
 import com.example.ui.viewmodel.ProfileAssistantViewModel
@@ -101,7 +109,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureAppCheck(this, intent)
-        FazaAdsManager.initialize(this)
         enableEdgeToEdge()
         isInPipModeState = isInPictureInPictureMode
         handleIncomingIntent(intent)
@@ -128,6 +135,9 @@ class MainActivity : ComponentActivity() {
             val profileAssistantViewModel: ProfileAssistantViewModel = viewModel(
                 factory = ProfileAssistantViewModel.factory(app.assistantHistoryStore)
             )
+            val adFreeAccessViewModel: AdFreeAccessViewModel = viewModel(
+                factory = AdFreeAccessViewModel.factory(app.preferencesRepository)
+            )
 
             val preferences by settingsViewModel.preferences.collectAsStateWithLifecycle()
 
@@ -145,7 +155,8 @@ class MainActivity : ComponentActivity() {
                     playerViewModel = playerViewModel,
                     updateViewModel = updateViewModel,
                     settingsViewModel = settingsViewModel,
-                    profileAssistantViewModel = profileAssistantViewModel
+                    profileAssistantViewModel = profileAssistantViewModel,
+                    adFreeAccessViewModel = adFreeAccessViewModel
                 )
             }
         }
@@ -186,9 +197,11 @@ private fun FazaAppShell(
     playerViewModel: PlayerViewModel,
     updateViewModel: UpdateViewModel,
     settingsViewModel: SettingsViewModel,
-    profileAssistantViewModel: ProfileAssistantViewModel
+    profileAssistantViewModel: ProfileAssistantViewModel,
+    adFreeAccessViewModel: AdFreeAccessViewModel
 ) {
     val context = LocalContext.current
+    val hostActivity = remember(context) { context.findActivity() }
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -205,11 +218,19 @@ private fun FazaAppShell(
     val activePlayerVideo by playerViewModel.currentVideo.collectAsStateWithLifecycle()
     val isPlayerPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
     val endedVideoId by playerViewModel.endedVideoId.collectAsStateWithLifecycle()
+    val freeAccessStatus by adFreeAccessViewModel.freeAccessStatus.collectAsStateWithLifecycle()
+    val isLoadingRewardedAd by adFreeAccessViewModel.isLoadingRewardedAd.collectAsStateWithLifecycle()
+    val freeAccessFeedback by adFreeAccessViewModel.feedback.collectAsStateWithLifecycle()
+    val isInternetConnected = rememberIsInternetConnected()
     val lifecycleOwner = LocalLifecycleOwner.current
     var isProfileAssistantOpen by rememberSaveable { mutableStateOf(false) }
     var hasAttemptedStartupAutoResume by rememberSaveable { mutableStateOf(false) }
     var hasAllFilesAccess by remember { mutableStateOf(hasAllFilesAccessPermission()) }
     var awaitingSystemFileAccessReturn by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(isInternetConnected) {
+        adFreeAccessViewModel.onConnectivityChanged(isInternetConnected)
+    }
 
     LaunchedEffect(preferences.continuePlayingDuringCall) {
         playerViewModel.playerManager.setContinuePlayingDuringCall(preferences.continuePlayingDuringCall)
@@ -251,6 +272,7 @@ private fun FazaAppShell(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                adFreeAccessViewModel.refreshTimer()
                 updateViewModel.checkIfStale()
                 val granted = hasAllFilesAccessPermission()
                 hasAllFilesAccess = granted
@@ -269,6 +291,7 @@ private fun FazaAppShell(
 
     val isMainTabRoute = currentDestination?.hasRoute<FazaRoute.Folders>() == true ||
         currentDestination?.hasRoute<FazaRoute.FolderDetail>() == true ||
+        currentDestination?.hasRoute<FazaRoute.Favorites>() == true ||
         currentDestination?.hasRoute<FazaRoute.Profile>() == true ||
         currentDestination?.hasRoute<FazaRoute.Settings>() == true ||
         currentDestination == null
@@ -351,6 +374,7 @@ private fun FazaAppShell(
     val isHomeSelected = currentDestination?.hasRoute<FazaRoute.Folders>() == true ||
         currentDestination?.hasRoute<FazaRoute.FolderDetail>() == true ||
         currentDestination == null
+    val isFavoritesSelected = currentDestination?.hasRoute<FazaRoute.Favorites>() == true
     val isProfileSelected = currentDestination?.hasRoute<FazaRoute.Profile>() == true
     val isSettingsSelected = currentDestination?.hasRoute<FazaRoute.Settings>() == true
 
@@ -376,6 +400,18 @@ private fun FazaAppShell(
             contentDescription = "Home",
             testTag = "nav_home",
             onClick = { navigateTopLevel(FazaRoute.Folders) }
+        ),
+        FloatingNavTabItem(
+            id = "favorites_tab",
+            label = "Favorites",
+            showLabel = false,
+            selectedIcon = Icons.Filled.Favorite,
+            unselectedIcon = Icons.Outlined.FavoriteBorder,
+            selected = isFavoritesSelected,
+            badgeCount = 0,
+            contentDescription = "Favorites",
+            testTag = "nav_favorites",
+            onClick = { navigateTopLevel(FazaRoute.Favorites) }
         ),
         FloatingNavTabItem(
             id = "profile_tab",
@@ -442,8 +478,13 @@ private fun FazaAppShell(
     ) {
         val adaptiveSpec = calculateAdaptiveLayoutSpec(maxWidth, maxHeight)
         val useRail = adaptiveSpec.useNavigationRail
-        val isInternetConnected = rememberIsInternetConnected()
-        val hasBottomBannerAd = isInternetConnected && (isHomeRoot || (isProfileSelected && !isProfileAssistantOpen))
+        val shouldShowBannerAds = AdFreeAccessPolicy.shouldShowBannerAds(
+            isOnline = isInternetConnected,
+            expiresAtMs = freeAccessStatus.expiresAtMs,
+            nowMs = freeAccessStatus.evaluatedAtMs
+        )
+        val hasBottomBannerAd = shouldShowBannerAds &&
+            (isHomeRoot || (isProfileSelected && !isProfileAssistantOpen))
         val dockOnlyClearance = if (showChrome && !useRail) 78.dp else 0.dp
         val continueButtonSize = when {
             maxWidth < 360.dp -> 52.dp
@@ -543,6 +584,7 @@ private fun FazaAppShell(
                                 }
                             },
                             onUnlinkFolder = { libraryViewModel.removeFolder(it) },
+                            showBannerAd = shouldShowBannerAds,
                             bottomOverlayPadding = dockBottomClearance,
                             dockBottomPadding = dockOnlyClearance,
                             continueOverlayPadding = continueClearance
@@ -590,6 +632,34 @@ private fun FazaAppShell(
                         )
                     }
 
+                    composable<FazaRoute.Favorites> {
+                        val favoriteVideos = remember(
+                            libraryState.allPublicVideos,
+                            libraryState.sortOption
+                        ) {
+                            selectFavoriteVideos(
+                                allPublicVideos = libraryState.allPublicVideos,
+                                sortOption = libraryState.sortOption
+                            )
+                        }
+                        FavoritesScreen(
+                            favoriteVideos = favoriteVideos,
+                            allPublicVideos = libraryState.allPublicVideos,
+                            sortOption = libraryState.sortOption,
+                            onSortChange = { libraryViewModel.setSortOption(it) },
+                            onPlayVideo = { video ->
+                                navController.navigate(FazaRoute.Player(video.id)) {
+                                    launchSingleTop = true
+                                }
+                            },
+                            onToggleFavourite = { libraryViewModel.toggleFavourite(it) },
+                            onTogglePrivate = { libraryViewModel.togglePrivate(it) },
+                            onRemoveVideo = { libraryViewModel.removeVideo(it) },
+                            onBrowseFolders = { navigateTopLevel(FazaRoute.Folders) },
+                            bottomOverlayPadding = dockBottomClearance
+                        )
+                    }
+
                     composable<FazaRoute.Profile> {
                         ProfileScreen(
                             videos = libraryState.allPublicVideos,
@@ -615,6 +685,17 @@ private fun FazaAppShell(
                                 navController.navigate(FazaRoute.Updates) { launchSingleTop = true }
                             },
                             onLinkFolderClick = { openFolderTreeLauncher.launch(null) },
+                            freeAccessStatus = freeAccessStatus,
+                            isOnline = isInternetConnected,
+                            isLoadingRewardedAd = isLoadingRewardedAd,
+                            freeAccessFeedback = freeAccessFeedback,
+                            onWatchRewardedAd = {
+                                hostActivity?.let { activity ->
+                                    adFreeAccessViewModel.requestRewardedAd(activity, isInternetConnected)
+                                }
+                            },
+                            onDismissFreeAccessFeedback = { adFreeAccessViewModel.clearFeedback() },
+                            showBannerAd = shouldShowBannerAds,
                             bottomOverlayPadding = dockBottomClearance,
                             dockBottomPadding = dockOnlyClearance,
                             continueOverlayPadding = continueClearance
@@ -720,7 +801,7 @@ private fun FazaAppShell(
                     .padding(
                         start = adaptiveSpec.horizontalPadding,
                         end = adaptiveSpec.horizontalPadding + continueButtonSize + 12.dp,
-                        bottom = (if (useRail) 20.dp else 90.dp) + (if (hasBottomBannerAd) 92.dp else 0.dp)
+                        bottom = (if (useRail) 20.dp else 90.dp) + (if (hasBottomBannerAd) 76.dp else 0.dp)
                     )
             ) {
                 continueEmptyMessage?.let { message ->
@@ -757,7 +838,7 @@ private fun FazaAppShell(
                     .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
                     .padding(
                         end = adaptiveSpec.horizontalPadding,
-                        bottom = (if (useRail) 16.dp else 86.dp) + (if (hasBottomBannerAd) 92.dp else 0.dp)
+                        bottom = (if (useRail) 16.dp else 86.dp) + (if (hasBottomBannerAd) 76.dp else 0.dp)
                     )
             ) {
                 FloatingContinuePlayButton(
@@ -855,4 +936,10 @@ private fun FazaAppShell(
             )
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

@@ -51,6 +51,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -61,6 +63,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -1035,7 +1038,12 @@ internal fun SettingsAboutFolderContent(
             }
         }
 
-        // 4. Legal & Policies
+        // 5b. Special Thanks — Google
+        item(key = "about_special_thanks_card") {
+            SpecialThanksCard()
+        }
+
+        // 6. Legal & Policies
         item(key = "about_legal_card") {
             Surface(
                 shape = RoundedCornerShape(24.dp),
@@ -1218,6 +1226,90 @@ private fun ContactSocialRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun SpecialThanksCard(
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+
+    FazaGlassCard(
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("about_special_thanks_card")
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val isUltraCompact = maxWidth < 330.dp
+            val cardPadding = if (isUltraCompact) 14.dp else 18.dp
+            val badgeSize = if (isUltraCompact) 40.dp else 44.dp
+            val logoSize = if (isUltraCompact) 22.dp else 24.dp
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(cardPadding),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.7f)),
+                        modifier = Modifier.size(badgeSize)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_brand_google_g),
+                                contentDescription = stringResource(R.string.about_special_thanks_google_logo_cd),
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .size(logoSize)
+                                    .testTag("about_special_thanks_google_icon")
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.about_special_thanks_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("about_special_thanks_title")
+                        )
+                        Text(
+                            text = stringResource(R.string.about_special_thanks_google_label),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Text(
+                    text = stringResource(R.string.about_special_thanks_message),
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp),
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.testTag("about_special_thanks_message")
+                )
+            }
         }
     }
 }

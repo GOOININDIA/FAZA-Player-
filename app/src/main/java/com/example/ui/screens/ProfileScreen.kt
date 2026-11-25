@@ -82,7 +82,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.R
-import com.example.ads.rememberIsInternetConnected
+import com.example.ads.AdFreeAccessPolicy
+import com.example.ads.FreeAccessStatus
 import com.example.ai.AssistantChatMode
 import com.example.data.model.FolderSummary
 import com.example.data.model.UpdateCheckState
@@ -96,12 +97,23 @@ import com.example.ui.components.FazaBrandLogo
 import com.example.ui.components.FazaGlassCard
 import com.example.ui.components.FazaGlassIconBadge
 import com.example.ui.components.FazaGlassPillBadge
+import com.example.ui.components.FreeAccessSectionCard
 import com.example.ui.components.ProfileAssistantPanel
 import com.example.ui.components.RecentVideoChipCard
 import com.example.ui.components.VideoListCard
 import com.example.ui.components.isVideoEligibleForContinuePlaying
 import com.example.ui.components.rememberFazaGlassBorderBrush
+import com.example.ui.theme.FazaNavActivePurpleDark
+import com.example.ui.theme.FazaNavActivePurpleLight
+import com.example.ui.theme.FazaNavBorderDark
+import com.example.ui.theme.FazaNavBorderLight
+import com.example.ui.theme.FazaNavInactiveDark
+import com.example.ui.theme.FazaNavInactiveLight
+import com.example.ui.theme.FazaNavOnActivePurple
+import com.example.ui.theme.FazaNavSurfaceDark
+import com.example.ui.theme.FazaNavSurfaceLight
 import com.example.ui.theme.LocalFazaIsDark
+import com.example.ui.viewmodel.FreeAccessFeedback
 import com.example.ui.viewmodel.ProfileAssistantViewModel
 import com.example.util.Formatters
 
@@ -124,6 +136,17 @@ fun ProfileScreen(
     onOpenSettings: () -> Unit,
     onOpenUpdates: () -> Unit,
     onLinkFolderClick: () -> Unit,
+    freeAccessStatus: FreeAccessStatus = AdFreeAccessPolicy.resolveStatus(
+        watchedCount = preferences.rewardedAdsWatchedCount,
+        expiresAtMs = preferences.freeAccessExpiresAtMs,
+        nowMs = System.currentTimeMillis()
+    ),
+    isOnline: Boolean = false,
+    isLoadingRewardedAd: Boolean = false,
+    freeAccessFeedback: FreeAccessFeedback? = null,
+    onWatchRewardedAd: () -> Unit = {},
+    onDismissFreeAccessFeedback: () -> Unit = {},
+    showBannerAd: Boolean = false,
     bottomOverlayPadding: Dp = 0.dp,
     dockBottomPadding: Dp = bottomOverlayPadding,
     continueOverlayPadding: Dp = 0.dp,
@@ -137,7 +160,6 @@ fun ProfileScreen(
             .take(8)
     }
     val totalDurationMs = remember(videos) { videos.sumOf { it.durationMs.coerceAtLeast(0L) } }
-    val isInternetConnected = rememberIsInternetConnected()
 
     val assistantMessages by assistantViewModel.messages.collectAsStateWithLifecycle()
     val assistantUiState by assistantViewModel.uiState.collectAsStateWithLifecycle()
@@ -180,6 +202,15 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                val isDark = LocalFazaIsDark.current
+                val segmentedColors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight,
+                    activeContentColor = FazaNavOnActivePurple,
+                    activeBorderColor = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight,
+                    inactiveContainerColor = if (isDark) FazaNavSurfaceDark else FazaNavSurfaceLight,
+                    inactiveContentColor = if (isDark) FazaNavInactiveDark else FazaNavInactiveLight,
+                    inactiveBorderColor = if (isDark) FazaNavBorderDark else FazaNavBorderLight
+                )
                 SingleChoiceSegmentedButtonRow(
                     modifier = Modifier
                         .widthIn(max = adaptiveSpec.maxContentWidth)
@@ -190,6 +221,7 @@ fun ProfileScreen(
                         selected = !isAssistantOpen,
                         onClick = { onAssistantOpenChange(false) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        colors = segmentedColors,
                         icon = {
                             Icon(
                                 imageVector = Icons.Filled.Person,
@@ -205,6 +237,7 @@ fun ProfileScreen(
                         selected = isAssistantOpen,
                         onClick = { onAssistantOpenChange(true) },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        colors = segmentedColors,
                         icon = {
                             Icon(
                                 imageVector = Icons.Filled.AutoAwesome,
@@ -252,7 +285,7 @@ fun ProfileScreen(
                             bottomOverlayPadding = bottomOverlayPadding
                         )
                     } else {
-                        val profileGridBottomPadding = if (isInternetConnected) {
+                        val profileGridBottomPadding = if (showBannerAd) {
                             12.dp + continueOverlayPadding
                         } else {
                             24.dp + bottomOverlayPadding + navBarBottom
@@ -405,6 +438,21 @@ fun ProfileScreen(
                                             )
                                         }
                                     }
+                                }
+
+                                // Free Access — 24-Hour Ad-Free Access & 8 Rewarded Ads Progress
+                                item(
+                                    key = "profile_free_access",
+                                    span = { GridItemSpan(maxLineSpan) }
+                                ) {
+                                    FreeAccessSectionCard(
+                                        status = freeAccessStatus,
+                                        isOnline = isOnline,
+                                        isLoadingAd = isLoadingRewardedAd,
+                                        feedback = freeAccessFeedback,
+                                        onWatchRewardedAd = onWatchRewardedAd,
+                                        onDismissFeedback = onDismissFreeAccessFeedback
+                                    )
                                 }
 
                                 if (continueWatching.isNotEmpty()) {
@@ -565,7 +613,7 @@ fun ProfileScreen(
                             }
                             }
 
-                            if (isInternetConnected) {
+                            if (showBannerAd) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -578,10 +626,7 @@ fun ProfileScreen(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    FazaAdBannerCard(
-                                        testTag = "profile_ad_banner",
-                                        dockedBottom = true
-                                    )
+                                    FazaAdBannerCard(testTag = "profile_ad_banner")
                                 }
                             }
                         }

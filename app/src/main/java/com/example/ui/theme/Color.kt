@@ -55,7 +55,7 @@ val FazaLightSurfaceHighest = Color(0xFFE4E4E7)
 val FazaLightOutline = Color(0xFF71717A)
 val FazaLightOutlineVariant = Color(0xFFE4E4E7)
 
-val FazaLightPrimary = Color(0xFF6D28D9)
+val FazaLightPrimary = Color(0xFF7C3AED)
 val FazaLightOnPrimary = Color(0xFFFFFFFF)
 val FazaLightPrimaryContainer = Color(0xFFF3EEFF)
 val FazaLightOnPrimaryContainer = Color(0xFF2E1065)
@@ -72,6 +72,17 @@ val FazaLightOnTertiaryContainer = Color(0xFF0C4A6E)
 
 val FazaTextLightPrimary = Color(0xFF09090B)
 val FazaTextLightSecondary = Color(0xFF71717A)
+
+// Consistent Navigation & Segmented Control Colour System
+val FazaNavActivePurpleLight = Color(0xFF7C3AED)
+val FazaNavActivePurpleDark = Color(0xFF8B5CF6)
+val FazaNavOnActivePurple = Color(0xFFFFFFFF)
+val FazaNavSurfaceLight = Color(0xFFFFFFFF)
+val FazaNavSurfaceDark = FazaAmoledSurfaceLow
+val FazaNavBorderLight = Color(0xFFE4E4E7)
+val FazaNavBorderDark = FazaAmoledOutlineVariant
+val FazaNavInactiveLight = Color(0xFF71717A)
+val FazaNavInactiveDark = Color(0xFFA1A1AA)
 
 // Status Colors
 val MinimalSuccess = Color(0xFF10B981)

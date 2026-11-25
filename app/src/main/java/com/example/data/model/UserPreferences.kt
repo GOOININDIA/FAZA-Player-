@@ -333,7 +333,9 @@ data class UserPreferences(
     val privatePin: String? = null,
     val dismissedUpdateVersion: String? = null,
     val lastSeenUpdateVersionCode: Int = 0,
-    val updateManifestUrl: String = DEFAULT_UPDATE_MANIFEST_URL
+    val updateManifestUrl: String = DEFAULT_UPDATE_MANIFEST_URL,
+    val freeAccessExpiresAtMs: Long = 0L,
+    val rewardedAdsWatchedCount: Int = 0
 ) {
     val isHardwareAccelerationEnabled: Boolean
         get() = decoderMode != DecoderMode.SOFTWARE

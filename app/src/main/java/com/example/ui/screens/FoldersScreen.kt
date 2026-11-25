@@ -89,7 +89,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.example.ads.rememberIsInternetConnected
 import com.example.data.model.FolderSummary
 import com.example.data.model.SortOption
 import com.example.data.model.StreamProtocol
@@ -155,6 +154,7 @@ fun FoldersScreen(
     onLinkFolderClick: () -> Unit,
     onOpenFolder: (FolderSummary) -> Unit,
     onUnlinkFolder: (String) -> Unit,
+    showBannerAd: Boolean = false,
     bottomOverlayPadding: Dp = 0.dp,
     dockBottomPadding: Dp = bottomOverlayPadding,
     continueOverlayPadding: Dp = 0.dp,
@@ -167,7 +167,6 @@ fun FoldersScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
     val pullToRefreshState = rememberPullToRefreshState()
-    val isInternetConnected = rememberIsInternetConnected()
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -285,7 +284,7 @@ fun FoldersScreen(
                         }
 
                         if (folders.isEmpty()) {
-                            val emptyBottomPadding = if (isInternetConnected) {
+                            val emptyBottomPadding = if (showBannerAd) {
                                 12.dp + continueOverlayPadding
                             } else {
                                 24.dp + bottomOverlayPadding + navBarBottom
@@ -393,7 +392,7 @@ fun FoldersScreen(
                                 }
                             }
                         } else {
-                            val gridBottomPadding = if (isInternetConnected) {
+                            val gridBottomPadding = if (showBannerAd) {
                                 12.dp + continueOverlayPadding
                             } else {
                                 24.dp + bottomOverlayPadding + navBarBottom
@@ -529,7 +528,7 @@ fun FoldersScreen(
                     }
                 }
 
-                if (isInternetConnected) {
+                if (showBannerAd) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -542,10 +541,7 @@ fun FoldersScreen(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        FazaAdBannerCard(
-                            testTag = "home_ad_banner",
-                            dockedBottom = true
-                        )
+                        FazaAdBannerCard(testTag = "home_ad_banner")
                     }
                 }
             }

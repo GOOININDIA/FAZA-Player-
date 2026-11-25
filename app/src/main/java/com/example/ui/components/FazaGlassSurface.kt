@@ -220,7 +220,7 @@ fun FazaGlassIconBadge(
     }
     val iconTint = when {
         useSolidGradient -> colors.primary
-        useBlueHighlight -> colors.onSurface
+        useBlueHighlight -> colors.onSurfaceVariant
         else -> colors.primary
     }
 

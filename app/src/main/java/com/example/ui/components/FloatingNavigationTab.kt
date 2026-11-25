@@ -86,6 +86,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.VideoItem
+import com.example.ui.theme.FazaNavActivePurpleDark
+import com.example.ui.theme.FazaNavActivePurpleLight
+import com.example.ui.theme.FazaNavBorderDark
+import com.example.ui.theme.FazaNavBorderLight
+import com.example.ui.theme.FazaNavInactiveDark
+import com.example.ui.theme.FazaNavInactiveLight
+import com.example.ui.theme.FazaNavOnActivePurple
+import com.example.ui.theme.FazaNavSurfaceDark
+import com.example.ui.theme.FazaNavSurfaceLight
 import com.example.ui.theme.LocalFazaIsDark
 
 data class FloatingNavTabItem(
@@ -208,7 +217,7 @@ fun selectContinuePlayingVideo(
 }
 
 @Immutable
-private data class FloatingDockPalette(
+internal data class FloatingDockPalette(
     val dockBackground: Color,
     val dockSurfaceTop: Color,
     val dockSurfaceBottom: Color,
@@ -226,25 +235,41 @@ private data class FloatingDockPalette(
     val badgeContentColor: Color
 )
 
+internal fun resolveFloatingDockPalette(
+    isDark: Boolean,
+    badgeContainerColor: Color,
+    badgeContentColor: Color
+): FloatingDockPalette {
+    val surfaceColor = if (isDark) FazaNavSurfaceDark else FazaNavSurfaceLight
+    val borderColor = if (isDark) FazaNavBorderDark else FazaNavBorderLight
+    val activePurple = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight
+    val inactiveGrey = if (isDark) FazaNavInactiveDark else FazaNavInactiveLight
+    return FloatingDockPalette(
+        dockBackground = surfaceColor,
+        dockSurfaceTop = surfaceColor,
+        dockSurfaceBottom = surfaceColor,
+        dockBorderStart = borderColor,
+        dockBorderEnd = borderColor,
+        activeCapsuleColor = activePurple,
+        activeCapsuleEnd = activePurple,
+        activeContentColor = FazaNavOnActivePurple,
+        inactiveIconColor = inactiveGrey,
+        searchBackground = surfaceColor,
+        searchIconColor = inactiveGrey,
+        searchBorderStart = borderColor,
+        searchBorderEnd = borderColor,
+        badgeContainerColor = badgeContainerColor,
+        badgeContentColor = badgeContentColor
+    )
+}
+
 @Composable
 private fun rememberFloatingDockPalette(): FloatingDockPalette {
     val colors = MaterialTheme.colorScheme
     val isDark = LocalFazaIsDark.current
-    return remember(colors, isDark) {
-        FloatingDockPalette(
-            dockBackground = colors.surfaceContainerLow,
-            dockSurfaceTop = colors.surfaceContainerLow,
-            dockSurfaceBottom = colors.surfaceContainerLow,
-            dockBorderStart = colors.outlineVariant.copy(alpha = if (isDark) 0.7f else 0.85f),
-            dockBorderEnd = colors.outlineVariant.copy(alpha = if (isDark) 0.7f else 0.85f),
-            activeCapsuleColor = colors.primary.copy(alpha = if (isDark) 0.16f else 0.12f),
-            activeCapsuleEnd = colors.primary.copy(alpha = if (isDark) 0.16f else 0.12f),
-            activeContentColor = colors.primary,
-            inactiveIconColor = colors.onSurfaceVariant,
-            searchBackground = colors.surfaceContainerLow,
-            searchIconColor = colors.onSurface,
-            searchBorderStart = colors.outlineVariant.copy(alpha = if (isDark) 0.7f else 0.85f),
-            searchBorderEnd = colors.outlineVariant.copy(alpha = if (isDark) 0.7f else 0.85f),
+    return remember(colors.error, colors.onError, isDark) {
+        resolveFloatingDockPalette(
+            isDark = isDark,
             badgeContainerColor = colors.error,
             badgeContentColor = colors.onError
         )
@@ -293,12 +318,16 @@ fun FloatingNavigationDock(
                     .clip(pillShape)
                     .testTag("floating_navigation_dock")
             ) {
+                val isDenseRow = isCompact && items.size >= 4
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 6.dp, vertical = 6.dp)
+                        .padding(
+                            horizontal = if (isDenseRow) 4.dp else 6.dp,
+                            vertical = 6.dp
+                        )
                         .testTag("floating_home_tab_bar"),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (isDenseRow) 2.dp else 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val anyNonLabeledSelected = items.any { it.selected && !it.showLabel }
@@ -307,6 +336,7 @@ fun FloatingNavigationDock(
                             item.showLabel && item.selected -> 2.0f
                             item.showLabel && !anyNonLabeledSelected -> 2.0f
                             item.showLabel -> 1.45f
+                            item.selected && items.size >= 4 -> 1.18f
                             item.selected -> 1.45f
                             else -> 1.0f
                         }
@@ -324,6 +354,7 @@ fun FloatingNavigationDock(
                             palette = palette,
                             iconSize = iconSize,
                             labelFontSize = labelFontSize,
+                            minTabWidth = if (isDenseRow) 44.dp else 48.dp,
                             modifier = Modifier
                                 .weight(animatedWeight)
                                 .fillMaxHeight()
@@ -353,6 +384,7 @@ private fun FloatingDockTabButton(
     palette: FloatingDockPalette,
     iconSize: Dp,
     labelFontSize: TextUnit,
+    minTabWidth: Dp = 48.dp,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -382,7 +414,9 @@ private fun FloatingDockTabButton(
         label = "dock_tint_${item.id}"
     )
 
-    val activePillColor = palette.activeCapsuleColor.copy(alpha = pillAlpha)
+    val activePillColor = palette.activeCapsuleColor.copy(
+        alpha = palette.activeCapsuleColor.alpha * pillAlpha
+    )
 
     Box(
         modifier = modifier
@@ -391,7 +425,7 @@ private fun FloatingDockTabButton(
                 scaleY = itemScale
             }
             .heightIn(min = 48.dp)
-            .widthIn(min = 48.dp)
+            .widthIn(min = minTabWidth)
             .minimumInteractiveComponentSize()
             .clip(CircleShape)
             .background(activePillColor)
@@ -494,13 +528,19 @@ private fun FloatingSearchSquareButton(
         label = "floating_search_fg"
     )
 
+    val borderColor by animateColorAsState(
+        targetValue = if (isActive) palette.activeCapsuleColor else palette.searchBorderStart,
+        animationSpec = tween(180),
+        label = "floating_search_border"
+    )
+
     val shape = CircleShape
 
     Surface(
         shape = shape,
         color = containerColor,
         contentColor = iconColor,
-        border = BorderStroke(1.dp, palette.searchBorderStart),
+        border = BorderStroke(1.dp, borderColor),
         shadowElevation = 2.dp,
         tonalElevation = 0.dp,
         modifier = Modifier

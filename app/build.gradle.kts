@@ -17,8 +17,8 @@ android {
     applicationId = "apk.faza.go"
     minSdk = 24
     targetSdk = 36
-    versionCode = 53
-    versionName = "1.51 Beta"
+    versionCode = 59
+    versionName = "1.57 Beta"
 
     manifestPlaceholders["ADMOB_APP_ID"] = "ca-app-pub-6572024129453689~5808434174"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -47,11 +47,19 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      buildConfigField("String", "ADMOB_APP_ID", "\"ca-app-pub-6572024129453689~5808434174\"")
+      buildConfigField("String", "ADMOB_BANNER_AD_UNIT_ID", "\"ca-app-pub-6572024129453689/7809859094\"")
+      buildConfigField("String", "ADMOB_REWARDED_AD_UNIT_ID", "\"ca-app-pub-6572024129453689/8759531574\"")
+      buildConfigField("boolean", "USE_TEST_ADS", "false")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      buildConfigField("String", "ADMOB_APP_ID", "\"ca-app-pub-6572024129453689~5808434174\"")
+      buildConfigField("String", "ADMOB_BANNER_AD_UNIT_ID", "\"ca-app-pub-3940256099942544/6300978111\"")
+      buildConfigField("String", "ADMOB_REWARDED_AD_UNIT_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
+      buildConfigField("boolean", "USE_TEST_ADS", "true")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
       signingConfig = signingConfigs.getByName("debugConfig")

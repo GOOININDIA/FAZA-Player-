@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,16 @@ import com.example.ui.components.PlayerUiCustomizerEditor
 import com.example.ui.components.RunningTimeStyleEditor
 import com.example.ui.components.SubtitleStyleEditor
 import com.example.ui.components.rememberFazaBounceScale
+import com.example.ui.theme.FazaNavActivePurpleDark
+import com.example.ui.theme.FazaNavActivePurpleLight
+import com.example.ui.theme.FazaNavBorderDark
+import com.example.ui.theme.FazaNavBorderLight
+import com.example.ui.theme.FazaNavInactiveDark
+import com.example.ui.theme.FazaNavInactiveLight
+import com.example.ui.theme.FazaNavOnActivePurple
+import com.example.ui.theme.FazaNavSurfaceDark
+import com.example.ui.theme.FazaNavSurfaceLight
+import com.example.ui.theme.LocalFazaIsDark
 import kotlin.math.roundToInt
 
 @Composable
@@ -175,9 +186,16 @@ private fun DisplayCategoryPillStrip(
     activeSubTab: DisplaySubTab,
     onSelectSubTab: (DisplaySubTab) -> Unit
 ) {
+    val isDark = LocalFazaIsDark.current
+    val activePurple = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight
+    val surfaceColor = if (isDark) FazaNavSurfaceDark else FazaNavSurfaceLight
+    val borderColor = if (isDark) FazaNavBorderDark else FazaNavBorderLight
+    val inactiveGrey = if (isDark) FazaNavInactiveDark else FazaNavInactiveLight
+
     Surface(
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = surfaceColor,
+        border = BorderStroke(1.dp, borderColor),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("display_subtab_strip")
@@ -199,12 +217,12 @@ private fun DisplayCategoryPillStrip(
                     text = "Player Display Studio",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = activePurple
                 )
                 Text(
                     text = "All Player UI settings",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = inactiveGrey
                 )
             }
 
@@ -240,11 +258,11 @@ private fun DisplayCategoryPillStrip(
                                     onClick = { onSelectSubTab(tab) },
                                     interactionSource = interactionSource,
                                     shape = RoundedCornerShape(20.dp),
-                                    color = if (selected) {
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainerHigh
-                                    },
+                                    color = if (selected) activePurple else surfaceColor,
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        color = if (selected) activePurple else borderColor
+                                    ),
                                     modifier = Modifier
                                         .weight(1f)
                                         .graphicsLayer {
@@ -262,11 +280,7 @@ private fun DisplayCategoryPillStrip(
                                         Icon(
                                             imageVector = tab.icon,
                                             contentDescription = null,
-                                            tint = if (selected) {
-                                                MaterialTheme.colorScheme.onPrimaryContainer
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            },
+                                            tint = if (selected) FazaNavOnActivePurple else inactiveGrey,
                                             modifier = Modifier.size(19.dp)
                                         )
                                         Column(modifier = Modifier.weight(1f)) {
@@ -275,7 +289,7 @@ private fun DisplayCategoryPillStrip(
                                                 style = MaterialTheme.typography.labelLarge,
                                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                                 color = if (selected) {
-                                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                                    FazaNavOnActivePurple
                                                 } else {
                                                     MaterialTheme.colorScheme.onSurface
                                                 },
@@ -286,9 +300,9 @@ private fun DisplayCategoryPillStrip(
                                                 text = statusTag,
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = if (selected) {
-                                                    MaterialTheme.colorScheme.primary
+                                                    FazaNavOnActivePurple.copy(alpha = 0.85f)
                                                 } else {
-                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                    inactiveGrey
                                                 },
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
