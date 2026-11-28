@@ -88,7 +88,6 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -167,6 +166,7 @@ import com.example.ui.components.AlwaysOnAppIconOverlay
 import com.example.util.VideoLanguageResolver
 import com.example.ui.components.AlwaysOnRunningTimeOverlay
 import com.example.ui.components.AppIconOverlayBottomSheet
+import com.example.ui.components.FazaRingLoader
 import com.example.ui.components.FzCustomiseItemsBottomSheet
 import com.example.ui.components.FzEqualizerBottomSheet
 import com.example.ui.components.FzPlayerUiOverlay
@@ -185,6 +185,15 @@ import com.example.ui.components.resolveAppIconOverlayAlignment
 import com.example.ui.components.resolvePlayerAccent
 import com.example.ui.components.resolveRunningTimeAlignment
 import com.example.ui.components.saveBitmapScreenshotToGallery
+import com.example.ui.components.MinimalistDoubleTapSkipIndicator
+import com.example.ui.components.MinimalistGestureHudOverlay
+import com.example.ui.components.MinimalistHoldSpeedIndicator
+import com.example.ui.components.PlayerDoubleTapSkipFeedback
+import com.example.ui.components.PlayerGestureHudState
+import com.example.ui.components.PlayerGestureHudTokens
+import com.example.ui.components.gestureHudEnterTransition
+import com.example.ui.components.gestureHudExitTransition
+import com.example.ui.components.resolveGestureHudAlignment
 import com.example.ui.viewmodel.PlayerViewModel
 import com.example.ui.viewmodel.shouldShowUpNextInNowPlaying
 import com.example.util.Formatters
@@ -193,20 +202,6 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
-
-private sealed interface GestureHudState {
-    data class Brightness(val fraction: Float) : GestureHudState
-    data class Volume(val fraction: Float) : GestureHudState
-    data class Zoom(val scale: Float) : GestureHudState
-    data class Seek(val targetMs: Long, val deltaMs: Long) : GestureHudState
-    data class DoubleTapToggle(val isNowPlaying: Boolean) : GestureHudState
-}
-
-private data class DoubleTapSkipFeedback(
-    val isForward: Boolean,
-    val totalSeconds: Int,
-    val tick: Int
-)
 
 private enum class ActiveDragAxis { NONE, SEEK, BRIGHTNESS, VOLUME }
 
@@ -275,9 +270,11 @@ fun PlayerScreen(
 
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionCounter by remember { mutableIntStateOf(0) }
-    var gestureHud by remember { mutableStateOf<GestureHudState?>(null) }
+    var gestureHud by remember { mutableStateOf<PlayerGestureHudState?>(null) }
+    var lastVisibleGestureHud by remember { mutableStateOf<PlayerGestureHudState?>(null) }
     var gestureTick by remember { mutableIntStateOf(0) }
-    var doubleTapSkipFeedback by remember { mutableStateOf<DoubleTapSkipFeedback?>(null) }
+    var doubleTapSkipFeedback by remember { mutableStateOf<PlayerDoubleTapSkipFeedback?>(null) }
+    var lastVisibleDoubleTapSkip by remember { mutableStateOf<PlayerDoubleTapSkipFeedback?>(null) }
     var isHoldSpeedActive by remember { mutableStateOf(false) }
     var holdSpeedValue by remember { mutableFloatStateOf(2.0f) }
     var hasAdjustedHoldSpeed by remember { mutableStateOf(false) }
@@ -346,18 +343,18 @@ fun PlayerScreen(
         }
     }
 
-    // Auto-fade gesture HUD
+    // Auto-fade gesture HUD after interaction stops
     LaunchedEffect(gestureTick) {
         if (gestureHud != null) {
-            delay(950L)
+            delay(PlayerGestureHudTokens.AutoHideDelayMs)
             gestureHud = null
         }
     }
 
-    // Auto-fade double-tap skip ripple HUD
+    // Auto-fade double-tap skip indicator after interaction stops
     LaunchedEffect(doubleTapSkipFeedback?.tick) {
         if (doubleTapSkipFeedback != null) {
-            delay(950L)
+            delay(PlayerGestureHudTokens.AutoHideDelayMs)
             doubleTapSkipFeedback = null
         }
     }
@@ -661,7 +658,7 @@ fun PlayerScreen(
                                         currentPui.doubleTapSkipEnabled && xRatio < 0.36f -> {
                                             viewModel.playerManager.seekBy(-skipMs)
                                             val prevSecs = doubleTapSkipFeedback?.takeIf { !it.isForward }?.totalSeconds ?: 0
-                                            doubleTapSkipFeedback = DoubleTapSkipFeedback(
+                                            doubleTapSkipFeedback = PlayerDoubleTapSkipFeedback(
                                                 isForward = false,
                                                 totalSeconds = prevSecs + skipSec,
                                                 tick = (doubleTapSkipFeedback?.tick ?: 0) + 1
@@ -670,7 +667,7 @@ fun PlayerScreen(
                                         currentPui.doubleTapSkipEnabled && xRatio > 0.64f -> {
                                             viewModel.playerManager.seekBy(skipMs)
                                             val prevSecs = doubleTapSkipFeedback?.takeIf { it.isForward }?.totalSeconds ?: 0
-                                            doubleTapSkipFeedback = DoubleTapSkipFeedback(
+                                            doubleTapSkipFeedback = PlayerDoubleTapSkipFeedback(
                                                 isForward = true,
                                                 totalSeconds = prevSecs + skipSec,
                                                 tick = (doubleTapSkipFeedback?.tick ?: 0) + 1
@@ -679,7 +676,7 @@ fun PlayerScreen(
                                         else -> {
                                             val willPlay = !isPlaying
                                             viewModel.playerManager.togglePlayPause()
-                                            gestureHud = GestureHudState.DoubleTapToggle(willPlay)
+                                            gestureHud = PlayerGestureHudState.DoubleTapToggle(willPlay)
                                             gestureTick++
                                         }
                                     }
@@ -770,7 +767,7 @@ fun PlayerScreen(
                                         Offset.Zero
                                     }
                                     event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                    gestureHud = GestureHudState.Zoom(newZoom)
+                                    gestureHud = PlayerGestureHudState.Zoom(newZoom)
                                     gestureTick++
                                 } else if (!isMultiTouch) {
                                     val change = event.changes.firstOrNull() ?: continue
@@ -821,7 +818,7 @@ fun PlayerScreen(
                                             if (totalDuration > 0L) {
                                                 val deltaMs = ((dx / size.width.coerceAtLeast(1)) * 90_000f).toLong()
                                                 pendingSeekTarget = (initSeekPos + deltaMs).coerceIn(0L, totalDuration)
-                                                gestureHud = GestureHudState.Seek(
+                                                gestureHud = PlayerGestureHudState.Seek(
                                                     targetMs = pendingSeekTarget,
                                                     deltaMs = pendingSeekTarget - initSeekPos
                                                 )
@@ -837,7 +834,7 @@ fun PlayerScreen(
                                                 lp.screenBrightness = newBrightness
                                                 win.attributes = lp
                                             }
-                                            gestureHud = GestureHudState.Brightness(newBrightness)
+                                            gestureHud = PlayerGestureHudState.Brightness(newBrightness)
                                             gestureTick++
                                         }
                                         ActiveDragAxis.VOLUME -> {
@@ -849,7 +846,7 @@ fun PlayerScreen(
                                                 lastAppliedVolStep = targetStep
                                                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetStep, 0)
                                             }
-                                            gestureHud = GestureHudState.Volume(newVolFraction)
+                                            gestureHud = PlayerGestureHudState.Volume(newVolFraction)
                                             gestureTick++
                                         }
                                         ActiveDragAxis.NONE -> Unit
@@ -1280,9 +1277,12 @@ fun PlayerScreen(
 
         // Buffering & Error States
         if (isBuffering) {
-            CircularProgressIndicator(
-                color = playerAccent,
-                modifier = Modifier.align(Alignment.Center)
+            FazaRingLoader(
+                contentDescription = "Buffering video",
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(68.dp)
+                    .testTag("player_buffering_loader")
             )
         }
 
@@ -1333,53 +1333,35 @@ fun PlayerScreen(
             }
         }
 
-        // Double-Tap Left/Right 10s Skip Ripple Overlay
+        // Double-Tap Left/Right Skip Indicator (completely transparent, background-free)
+        if (doubleTapSkipFeedback != null) {
+            lastVisibleDoubleTapSkip = doubleTapSkipFeedback
+        }
+        val activeDoubleTapSkip = doubleTapSkipFeedback ?: lastVisibleDoubleTapSkip
         AnimatedVisibility(
             visible = doubleTapSkipFeedback != null && !isInPipMode,
-            enter = fadeIn() + scaleIn(initialScale = 0.88f),
-            exit = fadeOut() + scaleOut(targetScale = 0.88f),
+            enter = gestureHudEnterTransition(),
+            exit = gestureHudExitTransition(),
             modifier = Modifier
                 .align(
-                    if (doubleTapSkipFeedback?.isForward == true) Alignment.CenterEnd else Alignment.CenterStart
+                    if (activeDoubleTapSkip?.isForward == true) Alignment.CenterEnd else Alignment.CenterStart
                 )
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                .padding(horizontal = if (isCompactWidth) 18.dp else 36.dp)
+                .padding(horizontal = if (isCompactWidth) 24.dp else 44.dp)
         ) {
-            doubleTapSkipFeedback?.let { feedback ->
-                Surface(
-                    color = Color(0xC40A0B0E),
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
-                        .testTag(if (feedback.isForward) "double_tap_forward_hud" else "double_tap_rewind_hud")
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 14.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (feedback.isForward) Icons.Filled.FastForward else Icons.Filled.FastRewind,
-                            contentDescription = if (feedback.isForward) "Forward ${feedback.totalSeconds} seconds" else "Rewind ${feedback.totalSeconds} seconds",
-                            tint = playerAccent,
-                            modifier = Modifier.size(30.dp)
-                        )
-                        Text(
-                            text = if (feedback.isForward) "+${feedback.totalSeconds}s" else "-${feedback.totalSeconds}s",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
+            activeDoubleTapSkip?.let { feedback ->
+                MinimalistDoubleTapSkipIndicator(
+                    feedback = feedback,
+                    accentColor = playerAccent
+                )
             }
         }
 
-        // Hold-to-Set Playback Speed Live HUD Pill
+        // Hold-to-Set Playback Speed Indicator (completely transparent, background-free)
         AnimatedVisibility(
             visible = isHoldSpeedActive && !isInPipMode,
-            enter = fadeIn() + scaleIn(initialScale = 0.9f),
-            exit = fadeOut() + scaleOut(targetScale = 0.9f),
+            enter = gestureHudEnterTransition(),
+            exit = gestureHudExitTransition(),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .windowInsetsPadding(
@@ -1389,60 +1371,42 @@ fun PlayerScreen(
                     top = when {
                         isTwoLineTopBanner -> if (isShortHeight) 52.dp else 64.dp
                         topOverlayActive -> if (isShortHeight) 40.dp else 52.dp
-                        else -> 16.dp
+                        else -> 18.dp
                     }
                 )
         ) {
-            Surface(
-                color = Color(0xD90A0B0E),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .border(1.dp, playerAccent.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
-                    .testTag("hold_speed_hud")
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Speed,
-                            contentDescription = null,
-                            tint = playerAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = formatSpeedLabel(holdSpeedValue),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                    Text(
-                        text = if (hasAdjustedHoldSpeed) {
-                            "Speed set · Release to keep"
-                        } else {
-                            "${formatSpeedLabel(pui.holdDefaultSpeed)} Hold · Slide ← → to set speed"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFCBD5E1)
-                    )
-                }
-            }
+            MinimalistHoldSpeedIndicator(
+                speedLabel = formatSpeedLabel(holdSpeedValue),
+                hintText = if (hasAdjustedHoldSpeed) {
+                    "Release to keep"
+                } else {
+                    "Slide ← → to adjust"
+                },
+                accentColor = playerAccent
+            )
         }
 
-        // Animated Gesture HUD Indicator
+        // Minimalist Gesture Controls HUD (Brightness, Volume, Seek, Zoom, Play/Pause — background-free)
+        if (gestureHud != null) {
+            lastVisibleGestureHud = gestureHud
+        }
+        val activeGestureHud = gestureHud ?: lastVisibleGestureHud
+        val gestureAlignment = resolveGestureHudAlignment(activeGestureHud)
         AnimatedVisibility(
             visible = gestureHud != null && !isInPipMode,
-            enter = fadeIn() + scaleIn(initialScale = 0.9f),
-            exit = fadeOut() + scaleOut(targetScale = 0.9f),
-            modifier = Modifier.align(Alignment.Center)
+            enter = gestureHudEnterTransition(),
+            exit = gestureHudExitTransition(),
+            modifier = Modifier
+                .align(gestureAlignment)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .padding(horizontal = if (isCompactWidth) 22.dp else 34.dp)
         ) {
-            gestureHud?.let { GestureHudOverlay(hud = it, accentColor = playerAccent) }
+            activeGestureHud?.let { hud ->
+                MinimalistGestureHudOverlay(
+                    hud = hud,
+                    accentColor = playerAccent
+                )
+            }
         }
 
         // Transient Toast Banner (Aspect Ratio / Subtitle attached)
@@ -2724,113 +2688,7 @@ fun PlayerScreen(
     }
 }
 
-@Composable
-private fun GestureHudOverlay(hud: GestureHudState, accentColor: Color) {
-    Surface(
-        color = Color(0xB80A0B0E),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .border(0.5.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp))
-            .testTag("gesture_hud_indicator")
-    ) {
-        when (hud) {
-            is GestureHudState.Brightness -> {
-                HudMeter(
-                    icon = Icons.Filled.Brightness6,
-                    label = "BRIGHTNESS",
-                    valueText = "${(hud.fraction * 100).roundToInt()}%",
-                    progress = hud.fraction,
-                    accent = Color.White
-                )
-            }
-            is GestureHudState.Volume -> {
-                HudMeter(
-                    icon = if (hud.fraction <= 0.01f) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                    label = "VOLUME",
-                    valueText = "${(hud.fraction * 100).roundToInt()}%",
-                    progress = hud.fraction,
-                    accent = accentColor
-                )
-            }
-            is GestureHudState.Zoom -> {
-                HudMeter(
-                    icon = Icons.Filled.ZoomIn,
-                    label = "ZOOM",
-                    valueText = String.format(Locale.US, "%.2fx", hud.scale),
-                    progress = ((hud.scale - 0.5f) / 3.5f).coerceIn(0f, 1f),
-                    accent = Color.White
-                )
-            }
-            is GestureHudState.Seek -> {
-                Column(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Icon(
-                        imageVector = if (hud.deltaMs >= 0) Icons.Filled.FastForward else Icons.Filled.FastRewind,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Text(
-                        text = Formatters.formatDuration(hud.targetMs),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White
-                    )
-                    Text(
-                        text = Formatters.formatSignedDelta(hud.deltaMs),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor
-                    )
-                }
-            }
-            is GestureHudState.DoubleTapToggle -> {
-                Box(
-                    modifier = Modifier.padding(18.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (hud.isNowPlaying) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                        contentDescription = if (hud.isNowPlaying) "Play" else "Paused",
-                        tint = Color.White,
-                        modifier = Modifier.size(38.dp)
-                    )
-                }
-            }
-        }
-    }
-}
 
-@Composable
-private fun HudMeter(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    valueText: String,
-    progress: Float,
-    accent: Color
-) {
-    Column(
-        modifier = Modifier
-            .width(176.dp)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Icon(icon, contentDescription = label, tint = accent, modifier = Modifier.size(28.dp))
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color(0xFF9AA7BD))
-        Text(text = valueText, style = MaterialTheme.typography.titleLarge, color = Color.White)
-        LinearProgressIndicator(
-            progress = { progress.coerceIn(0f, 1f) },
-            color = accent,
-            trackColor = Color.White.copy(alpha = 0.2f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(999.dp))
-        )
-    }
-}
 
 private fun buildPipActions(context: Context, isPlaying: Boolean): List<RemoteAction> {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()

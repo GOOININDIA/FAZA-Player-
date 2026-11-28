@@ -26,7 +26,12 @@ internal fun resolveAppCheckDebugToken(context: Context, intent: Intent?): Strin
     }
 
     val configuredToken = runCatching {
-        context.getString(R.string.firebase_appcheck_debug_token).trim()
+        val resId = context.resources.getIdentifier(
+            "firebase_appcheck_debug_token",
+            "string",
+            context.packageName
+        )
+        if (resId != 0) context.getString(resId).trim() else null
     }.getOrNull()
     if (!configuredToken.isNullOrEmpty()) {
         return configuredToken

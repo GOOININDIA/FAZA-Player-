@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.data.model.AppCustomColorPreset
 import com.example.data.model.DecoderMode
 import com.example.data.model.NetworkStreamValidator
 import com.example.data.model.NowPlayingConfig
@@ -28,6 +29,7 @@ import com.example.util.Formatters
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -1933,6 +1935,344 @@ class FazaPlayerUnitTest {
                 sortOption = SortOption.DATE_ADDED_DESC
             ).isEmpty()
         )
+    }
+
+    @Test
+    fun fazaRingLoader_samplesExactKeyframesAndInterpolatesLinearly() {
+        val specs = com.example.ui.components.FazaRingLoaderSpecs
+        assertEquals(4, specs.size)
+
+        // Ring A: outer ring (r=105, circumference=660)
+        val ringA = specs[0]
+        assertEquals(105f, ringA.radius, 0.001f)
+        val aStart = com.example.ui.components.sampleRingLoaderState(ringA.keyframes, 0f)
+        assertEquals(0f, aStart.dashLength, 0.001f)
+        assertEquals(20f, aStart.strokeWidth, 0.001f)
+        assertEquals(-330f, aStart.dashOffset, 0.001f)
+
+        val aPeak = com.example.ui.components.sampleRingLoaderState(ringA.keyframes, 0.12f)
+        assertEquals(60f, aPeak.dashLength, 0.001f)
+        assertEquals(30f, aPeak.strokeWidth, 0.001f)
+        assertEquals(-335f, aPeak.dashOffset, 0.001f)
+
+        // Midpoint between 12% (-335) and 32% (-595) -> 22% should be -465 with dash=60, width=30
+        val aMid = com.example.ui.components.sampleRingLoaderState(ringA.keyframes, 0.22f)
+        assertEquals(60f, aMid.dashLength, 0.001f)
+        assertEquals(30f, aMid.strokeWidth, 0.001f)
+        assertEquals(-465f, aMid.dashOffset, 0.001f)
+
+        // Ring C & D: left and right rings (cx=85 & 155, r=70)
+        val ringC = specs[2]
+        val ringD = specs[3]
+        assertEquals(85f, ringC.cx, 0.001f)
+        assertEquals(155f, ringD.cx, 0.001f)
+        val cEnd = com.example.ui.components.sampleRingLoaderState(ringC.keyframes, 1f)
+        assertEquals(0f, cEnd.dashLength, 0.001f)
+        assertEquals(20f, cEnd.strokeWidth, 0.001f)
+        assertEquals(-440f, cEnd.dashOffset, 0.001f)
+    }
+
+    @Test
+    fun fazaSweeperCard_tokensAndSweepColorTransitionsMatchDesign() {
+        assertEquals(
+            androidx.compose.ui.graphics.Color(0xFF23C55E),
+            com.example.ui.components.FazaSweeperCardTokens.EmeraldAccent
+        )
+        assertEquals(
+            androidx.compose.ui.graphics.Color(0xFFE5F6EB),
+            com.example.ui.components.FazaSweeperCardTokens.IconBgLight
+        )
+        assertEquals(
+            com.example.ui.components.FazaSweeperCardTokens.TitleLight,
+            com.example.ui.components.resolveSweeperTextColor(
+                com.example.ui.components.FazaSweeperCardTokens.TitleLight,
+                sweepFraction = 0f
+            )
+        )
+        assertEquals(
+            androidx.compose.ui.graphics.Color.White,
+            com.example.ui.components.resolveSweeperTextColor(
+                com.example.ui.components.FazaSweeperCardTokens.TitleLight,
+                sweepFraction = 1f
+            )
+        )
+        assertEquals(
+            com.example.ui.components.FazaSweeperCardTokens.EmeraldAccent,
+            com.example.ui.components.resolveSweeperIconTintColor(0f)
+        )
+        assertEquals(
+            androidx.compose.ui.graphics.Color.White,
+            com.example.ui.components.resolveSweeperIconTintColor(1f)
+        )
+    }
+
+    @Test
+    fun appUpdateManager_parsesRemoteConfigChangelogsAndValidatesDownloadUrls() = kotlinx.coroutines.test.runTest {
+        val repo = UpdateRepository()
+        var fetchCalls = 0
+        val fakeSource = object : com.example.update.RemoteConfigUpdateSource {
+            override suspend fun fetchLatestConfig(forceRefresh: Boolean): Result<com.example.update.RemoteConfigUpdateSnapshot> {
+                fetchCalls++
+                return Result.success(
+                    com.example.update.RemoteConfigUpdateSnapshot(
+                        latestVersionName = "2.0 Beta",
+                        latestVersionCode = 99,
+                        downloadUrl = "https://github.com/GOOININDIA/FAZA-Player/releases/download/v2.0/faza-2.0.apk",
+                        releaseDate = "December 2026",
+                        summary = "Major playback engine upgrade.",
+                        changelogRaw = """["Hardware AV1 decode acceleration", "Redesigned subtitle sync editor"]""",
+                        performanceRaw = "- 30% faster folder scan\n- Lower idle battery drain",
+                        bugFixesRaw = "• Fixed HDMI audio handoff",
+                        isMandatory = false
+                    )
+                )
+            }
+        }
+
+        val manager = com.example.update.AppUpdateManager(
+            context = null,
+            updateRepository = repo,
+            remoteConfigSource = fakeSource
+        )
+
+        val result = manager.checkForUpdates(
+            forceRefresh = true,
+            currentVersionCode = 64,
+            currentVersionName = "1.62 Beta"
+        )
+        assertTrue(result is com.example.data.model.UpdateCheckState.UpdateAvailable)
+        val manifest = (result as com.example.data.model.UpdateCheckState.UpdateAvailable).manifest
+        assertEquals("2.0 Beta", manifest.latestVersion)
+        assertEquals(99, manifest.latestVersionCode)
+        assertEquals(com.example.update.AppUpdateManager.SOURCE_LABEL_REMOTE_CONFIG, manifest.sourceLabel)
+        assertEquals(
+            listOf("Hardware AV1 decode acceleration", "Redesigned subtitle sync editor"),
+            manifest.newFeatures
+        )
+        assertEquals(
+            listOf("30% faster folder scan", "Lower idle battery drain"),
+            manifest.performanceImprovements
+        )
+        assertEquals(listOf("Fixed HDMI audio handoff"), manifest.bugFixes)
+        assertEquals(1, fetchCalls)
+
+        // Up-to-date check when remote version matches installed version
+        val upToDateState = manager.evaluateSnapshot(
+            snapshot = com.example.update.RemoteConfigUpdateSnapshot(
+                latestVersionName = "1.62 Beta",
+                latestVersionCode = 64
+            ),
+            currentVersionCode = 64,
+            currentVersionName = "1.62 Beta"
+        )
+        assertTrue(upToDateState is com.example.data.model.UpdateCheckState.UpToDate)
+
+        // Download URL security validation
+        assertTrue(com.example.update.AppUpdateManager.isValidDownloadUrl("https://github.com/GOOININDIA/FAZA-Player/releases/latest"))
+        assertFalse(com.example.update.AppUpdateManager.isValidDownloadUrl("javascript:alert(1)"))
+        assertFalse(com.example.update.AppUpdateManager.isValidDownloadUrl("file:///sdcard/app.apk"))
+        assertFalse(com.example.update.AppUpdateManager.isValidDownloadUrl(""))
+    }
+
+    @Test
+    fun dynamicCustomThemeColorSystem_presetsHexParsingHsvAndMonochromeWork() {
+        val expectedLabels = listOf(
+            "Blue", "Purple", "Green", "Red", "Orange", "Pink",
+            "Teal", "Cyan", "Yellow", "Deep Purple", "Monochrome"
+        )
+        assertEquals(expectedLabels, AppCustomColorPreset.entries.map { it.label })
+
+        // HEX parser accepts #RRGGBB, RRGGBB, #AARRGGBB, and rejects malformed values
+        assertEquals(0xFF6750A4L, com.example.ui.theme.parseColorHexInput("#6750A4"))
+        assertEquals(0xFF6750A4L, com.example.ui.theme.parseColorHexInput("6750a4"))
+        assertEquals(0xFF2563EBL, com.example.ui.theme.parseColorHexInput("#FF2563EB"))
+        assertNull(com.example.ui.theme.parseColorHexInput("#12345"))
+        assertNull(com.example.ui.theme.parseColorHexInput("#GGGGGG"))
+        assertNull(com.example.ui.theme.parseColorHexInput(""))
+
+        // HSV round-trip accuracy for custom color picker spectrum
+        val sampleHex = 0xFF6750A4L
+        val (h, s, v) = com.example.ui.theme.rgbHexToHsv(sampleHex)
+        val reconstructed = com.example.ui.theme.hsvToRgbHex(h, s, v)
+        assertEquals(sampleHex, reconstructed)
+
+        // Monochrome preset produces true neutral grayscale palettes in both Light and Dark modes
+        assertTrue(com.example.ui.theme.isMonochromeSeedColor(AppCustomColorPreset.MONOCHROME.seedHex))
+        assertTrue(com.example.ui.theme.isMonochromeSeedColor(0xFF808080L))
+        assertFalse(com.example.ui.theme.isMonochromeSeedColor(AppCustomColorPreset.OCEAN_BLUE.seedHex))
+
+        val monoDark = com.example.ui.theme.buildCustomAppColorScheme(
+            AppCustomColorPreset.MONOCHROME.seedHex,
+            isDark = true
+        )
+        val monoLight = com.example.ui.theme.buildCustomAppColorScheme(
+            AppCustomColorPreset.MONOCHROME.seedHex,
+            isDark = false
+        )
+        assertEquals(com.example.ui.theme.FazaAmoledBlack, monoDark.background)
+        assertTrue(kotlin.math.abs(monoDark.primary.red - monoDark.primary.blue) < 0.05f)
+        assertTrue(kotlin.math.abs(monoLight.primary.red - monoLight.primary.blue) < 0.05f)
+
+        // Floating navigation dock adopts active custom theme accent when supplied
+        val customAccent = androidx.compose.ui.graphics.Color(0xFF2563EB)
+        val customOnAccent = androidx.compose.ui.graphics.Color.White
+        val customDock = com.example.ui.components.resolveFloatingDockPalette(
+            isDark = true,
+            badgeContainerColor = androidx.compose.ui.graphics.Color.Red,
+            badgeContentColor = androidx.compose.ui.graphics.Color.White,
+            activeAccentColor = customAccent,
+            activeContentColor = customOnAccent
+        )
+        assertEquals(customAccent, customDock.activeCapsuleColor)
+        assertEquals(customOnAccent, customDock.activeContentColor)
+    }
+
+    @Test
+    fun minimalistGestureHud_isCompletelyTransparentAndAlignedCorrectly() {
+        assertEquals(
+            androidx.compose.ui.graphics.Color.Transparent,
+            com.example.ui.components.PlayerGestureHudTokens.ContainerBackground
+        )
+        assertEquals(0f, com.example.ui.components.PlayerGestureHudTokens.ContainerBackground.alpha, 0.0001f)
+        assertTrue(com.example.ui.components.PlayerGestureHudTokens.AutoHideDelayMs in 500L..1200L)
+        assertTrue(com.example.ui.components.PlayerGestureHudTokens.FadeInDurationMs in 100..250)
+        assertTrue(com.example.ui.components.PlayerGestureHudTokens.FadeOutDurationMs in 150..350)
+
+        assertEquals(
+            androidx.compose.ui.Alignment.CenterStart,
+            com.example.ui.components.resolveGestureHudAlignment(
+                com.example.ui.components.PlayerGestureHudState.Brightness(0.65f)
+            )
+        )
+        assertEquals(
+            androidx.compose.ui.Alignment.CenterEnd,
+            com.example.ui.components.resolveGestureHudAlignment(
+                com.example.ui.components.PlayerGestureHudState.Volume(0.50f)
+            )
+        )
+        assertEquals(
+            androidx.compose.ui.Alignment.Center,
+            com.example.ui.components.resolveGestureHudAlignment(
+                com.example.ui.components.PlayerGestureHudState.Seek(targetMs = 30_000L, deltaMs = 10_000L)
+            )
+        )
+        assertEquals(
+            androidx.compose.ui.Alignment.Center,
+            com.example.ui.components.resolveGestureHudAlignment(
+                com.example.ui.components.PlayerGestureHudState.Zoom(1.5f)
+            )
+        )
+    }
+
+    @Test
+    fun googleAuthSubExtraction_andAccountIsolationKeysWork() {
+        // Build a synthetic JWT with Base64URL header.payload.signature containing Google subject ("sub")
+        val header = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"alg":"RS256","typ":"JWT"}""".toByteArray())
+        val payload = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(
+                """{"iss":"https://accounts.google.com","sub":"109876543210987654321","email":"user@gmail.com"}"""
+                    .toByteArray()
+            )
+        val fakeJwt = "$header.$payload.signaturePart"
+
+        assertEquals(
+            "109876543210987654321",
+            com.example.auth.extractGoogleSubFromIdToken(fakeJwt)
+        )
+        assertNull(com.example.auth.extractGoogleSubFromIdToken("not-a-jwt"))
+        assertNull(com.example.auth.extractGoogleSubFromIdToken(""))
+
+        // Account ID resolution prefers Google's unique subject ID over Firebase UID and never depends on Gmail
+        assertEquals(
+            "google-sub-123",
+            com.example.auth.resolveGoogleSub(
+                providerGoogleUid = "google-sub-123",
+                idTokenSub = "token-sub-456",
+                firebaseUid = "fb-uid-789"
+            )
+        )
+        assertEquals(
+            "token-sub-456",
+            com.example.auth.resolveGoogleSub(
+                providerGoogleUid = null,
+                idTokenSub = "token-sub-456",
+                firebaseUid = "fb-uid-789"
+            )
+        )
+        assertEquals(
+            "fb-uid-789",
+            com.example.auth.resolveGoogleSub(
+                providerGoogleUid = "",
+                idTokenSub = null,
+                firebaseUid = "fb-uid-789"
+            )
+        )
+
+        val accountA = com.example.auth.FazaGoogleAccount(
+            firebaseUid = "uid-a",
+            googleSub = "108800112233445566778",
+            displayName = "Alice Sharma",
+            email = "alice@gmail.com"
+        )
+        val accountASameSubRenamedEmail = accountA.copy(email = "alice.new@gmail.com")
+        val accountB = com.example.auth.FazaGoogleAccount(
+            firebaseUid = "uid-b",
+            googleSub = "109900223344556677889",
+            displayName = "Alice Sharma",
+            email = "alice@gmail.com"
+        )
+
+        // Same Google sub maps to the exact same FAZA AI account key (no duplicate accounts)
+        assertEquals(accountA.fazaAiAccountId, accountASameSubRenamedEmail.fazaAiAccountId)
+        assertEquals(
+            com.example.auth.computeAccountStorageKey(accountA.fazaAiAccountId),
+            com.example.auth.computeAccountStorageKey(accountASameSubRenamedEmail.fazaAiAccountId)
+        )
+        // Different Google sub maps to a completely isolated storage key even with identical display name/email
+        assertNotEquals(accountA.fazaAiAccountId, accountB.fazaAiAccountId)
+        assertNotEquals(
+            com.example.auth.computeAccountStorageKey(accountA.fazaAiAccountId),
+            com.example.auth.computeAccountStorageKey(accountB.fazaAiAccountId)
+        )
+    }
+
+    @Test
+    fun authErrorClassifier_mapsSignInTimeoutAndSessionExpiredCategories() {
+        val timeoutErr = com.example.auth.classifyAuthError(
+            com.example.auth.AuthNetworkTimeoutException("Google Sign-In timed out.")
+        )
+        assertEquals(com.example.auth.AuthErrorCategory.NETWORK_TIMEOUT, timeoutErr.category)
+        assertEquals("Network Timeout", timeoutErr.title)
+        assertTrue(timeoutErr.canRetry)
+        assertEquals("Retry", com.example.ui.components.resolveAuthErrorActionLabel(timeoutErr.category))
+
+        val socketTimeout = com.example.auth.classifyAuthError(java.net.SocketTimeoutException("read timed out"))
+        assertEquals(com.example.auth.AuthErrorCategory.NETWORK_TIMEOUT, socketTimeout.category)
+        assertEquals("Network Timeout", socketTimeout.title)
+
+        val expiredErr = com.example.auth.classifyAuthError(
+            com.example.auth.AuthSessionExpiredException()
+        )
+        assertEquals(com.example.auth.AuthErrorCategory.SESSION_EXPIRED, expiredErr.category)
+        assertEquals("Session Expired", expiredErr.title)
+        assertTrue(expiredErr.canRetry)
+        assertEquals("Sign In", com.example.ui.components.resolveAuthErrorActionLabel(expiredErr.category))
+
+        val signInFailed = com.example.auth.classifyAuthError(
+            IllegalStateException("Unable to verify your Google account right now.")
+        )
+        assertEquals(com.example.auth.AuthErrorCategory.SIGN_IN_FAILED, signInFailed.category)
+        assertEquals("Google Sign-In Failed", signInFailed.title)
+        assertEquals("Retry", com.example.ui.components.resolveAuthErrorActionLabel(signInFailed.category))
+
+        val signOutErr = com.example.auth.classifyAuthError(
+            IllegalStateException("Could not clear credentials"),
+            fallbackCategory = com.example.auth.AuthErrorCategory.SIGN_OUT_FAILED
+        )
+        assertEquals(com.example.auth.AuthErrorCategory.SIGN_OUT_FAILED, signOutErr.category)
+        assertFalse(signOutErr.canRetry)
+        assertNull(com.example.ui.components.resolveAuthErrorActionLabel(signOutErr.category))
     }
 }
 

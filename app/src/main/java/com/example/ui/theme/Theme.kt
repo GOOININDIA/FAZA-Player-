@@ -14,6 +14,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -31,13 +32,30 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
+ * Centralized global theme configuration exposed across all FAZA Player screens & components.
+ */
+@Immutable
+data class FazaThemeConfig(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val appColorSource: AppColorSource = AppColorSource.WALLPAPER,
+    val customColorHex: Long = AppCustomColorPreset.ELECTRIC_VIOLET.seedHex,
+    val isDark: Boolean = true,
+    val isMonochrome: Boolean = false
+)
+
+/**
  * Exposes whether the active FAZA Player theme is currently rendering in AMOLED Dark mode.
  */
 val LocalFazaIsDark = staticCompositionLocalOf { true }
 
 /**
+ * Exposes the active global [FazaThemeConfig] to every screen and component.
+ */
+val LocalFazaThemeConfig = staticCompositionLocalOf { FazaThemeConfig() }
+
+/**
  * Signature Premium AMOLED Dark ColorScheme:
- * Pure #000000 AMOLED canvas, layered obsidian glass surfaces,
+ * Pure obsidian AMOLED canvas, layered neutral surfaces,
  * Electric Purple / Vibrant Violet primary, and subtle Electric Blue highlights.
  */
 val FazaAmoledDarkColorScheme: ColorScheme = darkColorScheme(
@@ -72,7 +90,7 @@ val FazaAmoledDarkColorScheme: ColorScheme = darkColorScheme(
 
 /**
  * Optional Crisp Light ColorScheme:
- * Luminous cool-pearl background, frosted pure-white glass cards,
+ * Luminous cool-pearl background, crisp pure-white cards,
  * Vibrant Violet primary, and subtle Electric Blue accents.
  */
 val FazaCrispLightColorScheme: ColorScheme = lightColorScheme(
@@ -146,6 +164,45 @@ fun hslToRgbHex(hueDeg: Float, saturation: Float, lightness: Float): Long {
     return (0xFFL shl 24) or (r.toLong() shl 16) or (g.toLong() shl 8) or b.toLong()
 }
 
+fun rgbHexToHsv(colorHex: Long): Triple<Float, Float, Float> {
+    val r = ((colorHex shr 16) and 0xFFL) / 255f
+    val g = ((colorHex shr 8) and 0xFFL) / 255f
+    val b = (colorHex and 0xFFL) / 255f
+    val maxC = max(r, max(g, b))
+    val minC = min(r, min(g, b))
+    val delta = maxC - minC
+    val h = when {
+        delta == 0f -> 0f
+        maxC == r -> 60f * (((g - b) / delta) % 6f)
+        maxC == g -> 60f * (((b - r) / delta) + 2f)
+        else -> 60f * (((r - g) / delta) + 4f)
+    }
+    val s = if (maxC == 0f) 0f else delta / maxC
+    val v = maxC
+    return Triple(((h % 360f) + 360f) % 360f, s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))
+}
+
+fun hsvToRgbHex(hueDeg: Float, saturation: Float, value: Float): Long {
+    val h = ((hueDeg % 360f) + 360f) % 360f
+    val s = saturation.coerceIn(0f, 1f)
+    val v = value.coerceIn(0f, 1f)
+    val c = v * s
+    val x = c * (1f - abs((h / 60f) % 2f - 1f))
+    val m = v - c
+    val (r1, g1, b1) = when {
+        h < 60f -> Triple(c, x, 0f)
+        h < 120f -> Triple(x, c, 0f)
+        h < 180f -> Triple(0f, c, x)
+        h < 240f -> Triple(0f, x, c)
+        h < 300f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    val r = ((r1 + m) * 255f).roundToInt().coerceIn(0, 255)
+    val g = ((g1 + m) * 255f).roundToInt().coerceIn(0, 255)
+    val b = ((b1 + m) * 255f).roundToInt().coerceIn(0, 255)
+    return (0xFFL shl 24) or (r.toLong() shl 16) or (g.toLong() shl 8) or b.toLong()
+}
+
 private fun hslComposeColor(hueDeg: Float, saturation: Float, lightness: Float): Color =
     Color(hslToRgbHex(hueDeg, saturation, lightness))
 
@@ -160,21 +217,113 @@ fun formatColorHexLabel(colorHex: Long): String {
     return "#" + rgb.toString(16).uppercase().padStart(6, '0')
 }
 
+/**
+ * Validates and parses user-entered HEX color strings such as "#6750A4", "6750A4", or "#FF6750A4".
+ * Returns a normalized 0xFFRRGGBB Long, or null if the input is invalid.
+ */
+fun parseColorHexInput(raw: String): Long? {
+    val cleaned = raw.trim().removePrefix("#").uppercase()
+    val rgbHex = when (cleaned.length) {
+        6 -> cleaned
+        8 -> cleaned.substring(2)
+        else -> return null
+    }
+    if (!rgbHex.all { it in '0'..'9' || it in 'A'..'F' }) return null
+    val parsedRgb = rgbHex.toLongOrNull(16) ?: return null
+    return 0xFF000000L or (parsedRgb and 0xFFFFFFL)
+}
+
+fun isMonochromeSeedColor(seedColorHex: Long): Boolean {
+    if (seedColorHex == AppCustomColorPreset.MONOCHROME.seedHex) return true
+    val (_, rawSat, _) = rgbHexToHsl(seedColorHex)
+    return rawSat < 0.08f
+}
+
+private fun buildMonochromeColorScheme(isDark: Boolean): ColorScheme {
+    return if (isDark) {
+        darkColorScheme(
+            primary = Color(0xFFE4E4E7),
+            onPrimary = Color(0xFF09090B),
+            primaryContainer = Color(0xFF27272A),
+            onPrimaryContainer = Color(0xFFFAFAFA),
+            secondary = Color(0xFFA1A1AA),
+            onSecondary = Color(0xFF09090B),
+            secondaryContainer = Color(0xFF1C1C20),
+            onSecondaryContainer = Color(0xFFF4F4F5),
+            tertiary = Color(0xFFD4D4D8),
+            onTertiary = Color(0xFF09090B),
+            tertiaryContainer = Color(0xFF27272A),
+            onTertiaryContainer = Color(0xFFF4F4F5),
+            background = FazaAmoledBlack,
+            onBackground = FazaTextDarkPrimary,
+            surface = FazaAmoledSurface,
+            onSurface = FazaTextDarkPrimary,
+            surfaceVariant = Color(0xFF1F1F23),
+            onSurfaceVariant = FazaTextDarkSecondary,
+            surfaceContainerLowest = FazaAmoledSurfaceLowest,
+            surfaceContainerLow = Color(0xFF111113),
+            surfaceContainer = Color(0xFF161619),
+            surfaceContainerHigh = Color(0xFF1F1F23),
+            surfaceContainerHighest = Color(0xFF2A2A2E),
+            outline = Color(0xFF52525B),
+            outlineVariant = Color(0xFF27272A),
+            error = FazaDarkError,
+            onError = FazaOnDarkError
+        )
+    } else {
+        lightColorScheme(
+            primary = Color(0xFF18181B),
+            onPrimary = Color(0xFFFFFFFF),
+            primaryContainer = Color(0xFFE4E4E7),
+            onPrimaryContainer = Color(0xFF09090B),
+            secondary = Color(0xFF52525B),
+            onSecondary = Color(0xFFFFFFFF),
+            secondaryContainer = Color(0xFFF1F1F3),
+            onSecondaryContainer = Color(0xFF18181B),
+            tertiary = Color(0xFF3F3F46),
+            onTertiary = Color(0xFFFFFFFF),
+            tertiaryContainer = Color(0xFFE4E4E7),
+            onTertiaryContainer = Color(0xFF18181B),
+            background = FazaLightBg,
+            onBackground = FazaTextLightPrimary,
+            surface = FazaLightSurface,
+            onSurface = FazaTextLightPrimary,
+            surfaceVariant = Color(0xFFECECEF),
+            onSurfaceVariant = FazaTextLightSecondary,
+            surfaceContainerLowest = Color(0xFFFFFFFF),
+            surfaceContainerLow = Color(0xFFFFFFFF),
+            surfaceContainer = Color(0xFFF4F4F5),
+            surfaceContainerHigh = Color(0xFFECECEF),
+            surfaceContainerHighest = Color(0xFFE4E4E7),
+            outline = Color(0xFF71717A),
+            outlineVariant = Color(0xFFE4E4E7),
+            error = Color(0xFFDC2626),
+            onError = Color.White
+        )
+    }
+}
+
 fun buildCustomAppColorScheme(seedColorHex: Long, isDark: Boolean): ColorScheme {
-    // Signature Electric Violet uses our hand-tuned AMOLED obsidian & crisp light tokens
+    // True grayscale/monochrome theme when monochrome preset or near-zero saturation color is selected
+    if (isMonochromeSeedColor(seedColorHex)) {
+        return buildMonochromeColorScheme(isDark)
+    }
+
+    // Signature Purple (Electric Violet) uses our hand-tuned AMOLED obsidian & crisp light tokens
     if (seedColorHex == AppCustomColorPreset.ELECTRIC_VIOLET.seedHex) {
         return if (isDark) FazaAmoledDarkColorScheme else FazaCrispLightColorScheme
     }
 
-    val (rawHue, rawSat, _) = rgbHexToHsl(seedColorHex)
+    val (rawHue, rawSat, rawLight) = rgbHexToHsl(seedColorHex)
     val h = rawHue
-    val s = rawSat.coerceIn(0.36f, 0.94f)
-    // Pair custom hue with a cool electric-blue shifted tertiary highlight
+    val s = rawSat.coerceIn(0.32f, 0.94f)
+    // Harmonious secondary & tertiary hue shifts
     val tertiaryHue = (h + 320f) % 360f
     val secondaryHue = (h + 18f) % 360f
 
     return if (isDark) {
-        val primary = hslComposeColor(h, (s * 0.88f).coerceIn(0.45f, 0.95f), 0.74f)
+        val darkLightness = rawLight.coerceIn(0.64f, 0.78f)
+        val primary = hslComposeColor(h, (s * 0.88f).coerceIn(0.45f, 0.95f), darkLightness)
         val darkInk = hslComposeColor(h, s, 0.10f)
         val primaryContainer = hslComposeColor(h, (s * 0.72f), 0.24f)
         val onPrimaryContainer = hslComposeColor(h, (s * 0.85f), 0.94f)
@@ -196,7 +345,6 @@ fun buildCustomAppColorScheme(seedColorHex: Long, isDark: Boolean): ColorScheme 
             onTertiary = bestContrastOnColor(tertiary, hslComposeColor(tertiaryHue, s, 0.10f), Color.White),
             tertiaryContainer = tertiaryContainer,
             onTertiaryContainer = hslComposeColor(tertiaryHue, (s * 0.80f), 0.92f),
-            // Clean minimalist dark canvas with subtle neutral-tinted surface steps
             background = FazaAmoledBlack,
             onBackground = FazaTextDarkPrimary,
             surface = FazaAmoledSurface,
@@ -214,7 +362,9 @@ fun buildCustomAppColorScheme(seedColorHex: Long, isDark: Boolean): ColorScheme 
             onError = FazaOnDarkError
         )
     } else {
-        val primary = hslComposeColor(h, s, 0.44f)
+        // Keep yellow/bright colors legible on light backgrounds by constraining primary lightness
+        val lightLightness = if (h in 42f..72f) 0.40f else rawLight.coerceIn(0.36f, 0.48f)
+        val primary = hslComposeColor(h, s, lightLightness)
         val darkInk = hslComposeColor(h, s, 0.12f)
         val primaryContainer = hslComposeColor(h, (s * 0.88f).coerceIn(0.35f, 0.95f), 0.92f)
         val onPrimaryContainer = hslComposeColor(h, s, 0.16f)
@@ -310,6 +460,16 @@ fun FazaPlayerTheme(
         }
     }
 
+    val themeConfig = remember(themeMode, appColorSource, customColorHex, isDark, useWallpaperColor) {
+        FazaThemeConfig(
+            themeMode = themeMode,
+            appColorSource = appColorSource,
+            customColorHex = customColorHex,
+            isDark = isDark,
+            isMonochrome = !useWallpaperColor && isMonochromeSeedColor(customColorHex)
+        )
+    }
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -323,7 +483,10 @@ fun FazaPlayerTheme(
         }
     }
 
-    CompositionLocalProvider(LocalFazaIsDark provides isDark) {
+    CompositionLocalProvider(
+        LocalFazaIsDark provides isDark,
+        LocalFazaThemeConfig provides themeConfig
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = FazaTypography,

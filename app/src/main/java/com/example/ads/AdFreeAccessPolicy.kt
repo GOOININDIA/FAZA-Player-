@@ -77,7 +77,7 @@ object AdFreeAccessPolicy {
      * Ad-Free Access priority rules:
      * 1. Active 24-hour free access -> hide all advertisements.
      * 2. Offline -> do not show or request any advertisements.
-     * 3. Online with no active free access -> show banner advertisements on Home & Profile.
+     * 3. Online with no active free access -> show banner advertisements on Home, Favorites & Profile.
      */
     fun shouldShowBannerAds(
         isOnline: Boolean,

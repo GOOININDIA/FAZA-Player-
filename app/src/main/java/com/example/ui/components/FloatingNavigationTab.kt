@@ -238,11 +238,12 @@ internal data class FloatingDockPalette(
 internal fun resolveFloatingDockPalette(
     isDark: Boolean,
     badgeContainerColor: Color,
-    badgeContentColor: Color
+    badgeContentColor: Color,
+    activeAccentColor: Color = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight,
+    activeContentColor: Color = FazaNavOnActivePurple
 ): FloatingDockPalette {
     val surfaceColor = if (isDark) FazaNavSurfaceDark else FazaNavSurfaceLight
     val borderColor = if (isDark) FazaNavBorderDark else FazaNavBorderLight
-    val activePurple = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight
     val inactiveGrey = if (isDark) FazaNavInactiveDark else FazaNavInactiveLight
     return FloatingDockPalette(
         dockBackground = surfaceColor,
@@ -250,9 +251,9 @@ internal fun resolveFloatingDockPalette(
         dockSurfaceBottom = surfaceColor,
         dockBorderStart = borderColor,
         dockBorderEnd = borderColor,
-        activeCapsuleColor = activePurple,
-        activeCapsuleEnd = activePurple,
-        activeContentColor = FazaNavOnActivePurple,
+        activeCapsuleColor = activeAccentColor,
+        activeCapsuleEnd = activeAccentColor,
+        activeContentColor = activeContentColor,
         inactiveIconColor = inactiveGrey,
         searchBackground = surfaceColor,
         searchIconColor = inactiveGrey,
@@ -267,11 +268,13 @@ internal fun resolveFloatingDockPalette(
 private fun rememberFloatingDockPalette(): FloatingDockPalette {
     val colors = MaterialTheme.colorScheme
     val isDark = LocalFazaIsDark.current
-    return remember(colors.error, colors.onError, isDark) {
+    return remember(colors.primary, colors.onPrimary, colors.error, colors.onError, isDark) {
         resolveFloatingDockPalette(
             isDark = isDark,
             badgeContainerColor = colors.error,
-            badgeContentColor = colors.onError
+            badgeContentColor = colors.onError,
+            activeAccentColor = colors.primary,
+            activeContentColor = colors.onPrimary
         )
     }
 }

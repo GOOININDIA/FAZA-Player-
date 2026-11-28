@@ -19,6 +19,8 @@ data class UpdateManifest(
     @JsonNames("url", "apkUrl", "download_url")
     val downloadUrl: String = "",
     val sourceLabel: String = "version.json",
+    val summary: String = "",
+    val isMandatory: Boolean = false,
     val newFeatures: List<String> = emptyList(),
     val performanceImprovements: List<String> = emptyList(),
     val bugFixes: List<String> = emptyList(),
@@ -64,6 +66,10 @@ sealed interface UpdateCheckState {
     data object Idle : UpdateCheckState
     data object Checking : UpdateCheckState
     data class UpdateAvailable(val manifest: UpdateManifest) : UpdateCheckState
-    data class UpToDate(val checkedAtMillis: Long, val serverHistory: List<VersionRelease>) : UpdateCheckState
+    data class UpToDate(
+        val checkedAtMillis: Long,
+        val serverHistory: List<VersionRelease>,
+        val sourceLabel: String = "Firebase Remote Config"
+    ) : UpdateCheckState
     data class Unavailable(val reason: String, val checkedAtMillis: Long) : UpdateCheckState
 }

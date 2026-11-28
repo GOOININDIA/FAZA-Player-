@@ -9,6 +9,7 @@ import com.example.data.model.UpdateCheckState
 import com.example.data.model.UpdateManifest
 import com.example.data.model.VersionRelease
 import com.example.data.repository.UpdateRepository
+import com.example.update.AppUpdateManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,11 +21,19 @@ import kotlinx.coroutines.launch
 
 class UpdateViewModel(
     private val updateRepository: UpdateRepository,
-    private val preferencesRepository: UserPreferencesRepository
+    private val preferencesRepository: UserPreferencesRepository,
+    private val appUpdateManager: AppUpdateManager = AppUpdateManager(
+        context = null,
+        updateRepository = updateRepository
+    )
 ) : ViewModel() {
 
     private val _checkState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
     val checkState: StateFlow<UpdateCheckState> = _checkState.asStateFlow()
+
+    val lastCheckedAtMillis: StateFlow<Long?> = appUpdateManager.lastCheckedAtMillis
+    val periodicIntervalMinutes: Int
+        get() = appUpdateManager.periodicIntervalMinutes
 
     private val _pendingPopupManifest = MutableStateFlow<UpdateManifest?>(null)
     val pendingPopupManifest: StateFlow<UpdateManifest?> = _pendingPopupManifest.asStateFlow()
@@ -74,81 +83,78 @@ class UpdateViewModel(
         initialValue = com.example.data.model.UserPreferences()
     )
 
-    private var lastCheckTimestampMs: Long = 0L
+    private var respectDismissedOnNextUpdate: Boolean = true
 
     init {
-        checkOnStartup()
+        observeUpdateManagerState()
+        startPeriodicRemoteConfigChecks()
     }
 
-    private fun checkOnStartup() {
+    private fun observeUpdateManagerState() {
+        viewModelScope.launch {
+            appUpdateManager.updateState.collect { result ->
+                _checkState.value = result
+                when (result) {
+                    is UpdateCheckState.UpdateAvailable -> {
+                        _detectedManifest.value = result.manifest
+                        _versionHistory.value = mergeHistory(result.manifest.versionHistory)
+                        respectDismissedOnNextUpdate = true
+                    }
+                    is UpdateCheckState.UpToDate -> {
+                        _detectedManifest.value = null
+                        _versionHistory.value = mergeHistory(result.serverHistory)
+                        respectDismissedOnNextUpdate = true
+                    }
+                    is UpdateCheckState.Unavailable -> {
+                        if (_detectedManifest.value == null) {
+                            _versionHistory.value = listOf(updateRepository.currentInstalledRelease)
+                        }
+                        respectDismissedOnNextUpdate = true
+                    }
+                    UpdateCheckState.Idle, UpdateCheckState.Checking -> Unit
+                }
+            }
+        }
+    }
+
+    private fun startPeriodicRemoteConfigChecks() {
         viewModelScope.launch {
             val prefs = preferencesRepository.preferencesFlow.first()
             if (BuildConfig.VERSION_CODE > prefs.lastSeenUpdateVersionCode) {
                 _showHomeChangelogPopup.value = true
                 _hasUnseenReleaseAlert.value = true
             }
-            performCheck(
-                manifestUrl = prefs.updateManifestUrl,
-                respectDismissed = true,
-                dismissedVersion = prefs.dismissedUpdateVersion
+            appUpdateManager.startPeriodicChecks(
+                scope = viewModelScope,
+                intervalMs = AppUpdateManager.DEFAULT_PERIODIC_INTERVAL_MS,
+                fallbackManifestUrlProvider = {
+                    preferencesRepository.preferencesFlow.first().updateManifestUrl
+                }
             )
         }
     }
 
-    fun checkIfStale(minIntervalMs: Long = 5 * 60 * 1000L) {
+    fun checkIfStale(minIntervalMs: Long = AppUpdateManager.DEFAULT_RESUME_STALE_INTERVAL_MS) {
         if (_checkState.value == UpdateCheckState.Checking) return
-        val now = System.currentTimeMillis()
-        if (lastCheckTimestampMs > 0L && (now - lastCheckTimestampMs) < minIntervalMs) return
         viewModelScope.launch {
             val prefs = preferencesRepository.preferencesFlow.first()
-            performCheck(
-                manifestUrl = prefs.updateManifestUrl,
-                respectDismissed = true,
-                dismissedVersion = prefs.dismissedUpdateVersion
+            respectDismissedOnNextUpdate = true
+            appUpdateManager.checkIfStale(
+                minIntervalMs = minIntervalMs,
+                fallbackManifestUrl = prefs.updateManifestUrl
             )
         }
     }
 
     fun checkManually() {
         _dismissedBannerVersion.value = null
+        respectDismissedOnNextUpdate = false
         viewModelScope.launch {
             val prefs = preferencesRepository.preferencesFlow.first()
-            performCheck(
-                manifestUrl = prefs.updateManifestUrl,
-                respectDismissed = false,
-                dismissedVersion = prefs.dismissedUpdateVersion
+            appUpdateManager.checkForUpdates(
+                forceRefresh = true,
+                fallbackManifestUrl = prefs.updateManifestUrl
             )
-        }
-    }
-
-    private suspend fun performCheck(
-        manifestUrl: String,
-        respectDismissed: Boolean,
-        dismissedVersion: String?
-    ) {
-        _checkState.value = UpdateCheckState.Checking
-        val result = updateRepository.checkForUpdates(manifestUrl)
-        lastCheckTimestampMs = System.currentTimeMillis()
-        _checkState.value = result
-
-        when (result) {
-            is UpdateCheckState.UpdateAvailable -> {
-                _detectedManifest.value = result.manifest
-                val remoteHistory = result.manifest.versionHistory
-                val merged = mergeHistory(remoteHistory)
-                _versionHistory.value = merged
-                if (!respectDismissed || dismissedVersion != result.manifest.latestVersion) {
-                    _pendingPopupManifest.value = result.manifest
-                }
-            }
-            is UpdateCheckState.UpToDate -> {
-                _detectedManifest.value = null
-                _versionHistory.value = mergeHistory(result.serverHistory)
-            }
-            is UpdateCheckState.Unavailable -> {
-                _versionHistory.value = listOf(updateRepository.currentInstalledRelease)
-            }
-            UpdateCheckState.Idle, UpdateCheckState.Checking -> Unit
         }
     }
 
@@ -206,6 +212,11 @@ class UpdateViewModel(
         }
     }
 
+    override fun onCleared() {
+        appUpdateManager.stopPeriodicChecks()
+        super.onCleared()
+    }
+
     private fun mergeHistory(remote: List<VersionRelease>): List<VersionRelease> {
         val installed = updateRepository.currentInstalledRelease
         val installedKey = installed.version.trim().removePrefix("v").removePrefix("V").lowercase()
@@ -222,11 +233,15 @@ class UpdateViewModel(
     companion object {
         fun factory(
             updateRepository: UpdateRepository,
-            preferencesRepository: UserPreferencesRepository
+            preferencesRepository: UserPreferencesRepository,
+            appUpdateManager: AppUpdateManager = AppUpdateManager(
+                context = null,
+                updateRepository = updateRepository
+            )
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return UpdateViewModel(updateRepository, preferencesRepository) as T
+                return UpdateViewModel(updateRepository, preferencesRepository, appUpdateManager) as T
             }
         }
     }

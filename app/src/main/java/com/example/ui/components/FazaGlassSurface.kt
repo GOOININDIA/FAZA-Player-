@@ -48,6 +48,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.lerp
+import com.example.ui.theme.LocalFazaIsDark
 
 /**
  * Reusable spring bounce press scale animation for Material You interactive elements.
@@ -136,69 +138,33 @@ fun rememberFazaAccentGradient(): Brush {
 }
 
 /**
- * Clean minimalist tonal card with subtle 1dp hairline border and restrained press feedback.
+ * Unified app card powered by [FazaSweeperCard] (emerald bottom-right ambient glow and
+ * expanding emerald circular sweep on hover/press).
  */
 @Composable
 fun FazaGlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(18.dp),
+    shape: Shape = FazaSweeperCardTokens.DefaultShape,
     accented: Boolean = false,
     highlightedBorder: Boolean = false,
     onClick: (() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val colors = MaterialTheme.colorScheme
-    val containerColor = if (accented) colors.surfaceContainer else colors.surfaceContainerLow
-    val contentColor = colors.onSurface
-    val borderStroke = when {
-        highlightedBorder -> BorderStroke(width = 1.25.dp, color = colors.primary)
-        accented -> BorderStroke(width = 1.dp, color = colors.primary.copy(alpha = 0.28f))
-        else -> BorderStroke(width = 1.dp, color = colors.outlineVariant.copy(alpha = 0.55f))
-    }
-
-    val interactiveModifier = if (onClick != null) {
-        val interactionSource = remember { MutableInteractionSource() }
-        val pressScale = rememberFazaBounceScale(
-            interactionSource = interactionSource,
-            enabled = true,
-            pressedScale = 0.98f
-        )
-        Modifier
-            .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            }
-            .clip(shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(bounded = true),
-                onClick = onClick
-            )
-    } else {
-        Modifier.clip(shape)
-    }
-
-    Surface(
+    FazaSweeperCard(
+        modifier = modifier,
         shape = shape,
-        color = containerColor,
-        contentColor = contentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = borderStroke,
-        modifier = modifier.then(interactiveModifier)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(contentPadding),
-            content = content
-        )
-    }
+        accented = accented,
+        highlightedBorder = highlightedBorder,
+        onClick = onClick,
+        contentPadding = contentPadding,
+        content = content
+    )
 }
 
 /**
- * Clean minimalist icon tile with subtle tonal fill instead of heavy saturated circles.
+ * Emerald-tinted icon tile matching the Sweeper Card visual identity, smoothly inverting to
+ * white when its parent card sweeps green on hover or press.
  */
 @Composable
 fun FazaGlassIconBadge(
@@ -206,23 +172,26 @@ fun FazaGlassIconBadge(
     contentDescription: String? = null,
     size: Dp = 40.dp,
     iconSize: Dp = 20.dp,
-    cornerRadius: Dp = 12.dp,
+    cornerRadius: Dp = 10.dp,
     useBlueHighlight: Boolean = false,
     useSolidGradient: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(cornerRadius.coerceAtMost(14.dp))
-    val bgColor = when {
-        useSolidGradient -> colors.primary.copy(alpha = 0.14f)
-        useBlueHighlight -> colors.surfaceContainerHigh
-        else -> colors.surfaceContainerHigh
+    val isDark = LocalFazaIsDark.current
+    val sweepFraction = LocalFazaSweeperSweepFraction.current
+    val shape = RoundedCornerShape(cornerRadius.coerceIn(6.dp, 14.dp))
+    val accentColor = if (useBlueHighlight) colors.tertiary else colors.primary
+    val restingBg = when {
+        useSolidGradient -> accentColor.copy(alpha = if (isDark) 0.24f else 0.16f)
+        else -> accentColor.copy(alpha = if (isDark) 0.18f else 0.12f)
     }
-    val iconTint = when {
-        useSolidGradient -> colors.primary
-        useBlueHighlight -> colors.onSurfaceVariant
-        else -> colors.primary
-    }
+    val bgColor = lerp(restingBg, colors.onPrimary.copy(alpha = 0.22f), sweepFraction)
+    val iconTint = resolveSweeperIconTintColor(
+        sweepFraction = sweepFraction,
+        accentColor = accentColor,
+        sweptContentColor = colors.onPrimary
+    )
 
     Box(
         modifier = modifier
@@ -354,12 +323,13 @@ fun FazaGlassPillBadge(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val bgColor = if (useBlueAccent) {
-        colors.surfaceContainerHigh
-    } else {
-        colors.primary.copy(alpha = 0.12f)
-    }
-    val textColor = if (useBlueAccent) colors.onSurfaceVariant else colors.primary
+    val isDark = LocalFazaIsDark.current
+    val sweepFraction = LocalFazaSweeperSweepFraction.current
+    val accent = if (useBlueAccent) colors.primary else colors.secondary
+    val restingBg = accent.copy(alpha = if (isDark) 0.22f else 0.14f)
+    val restingText = if (useBlueAccent) colors.primary else colors.onSecondaryContainer
+    val bgColor = lerp(restingBg, colors.onPrimary.copy(alpha = 0.22f), sweepFraction)
+    val textColor = lerp(restingText, colors.onPrimary, sweepFraction)
 
     Surface(
         shape = RoundedCornerShape(8.dp),
@@ -369,7 +339,7 @@ fun FazaGlassPillBadge(
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
             color = textColor,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )

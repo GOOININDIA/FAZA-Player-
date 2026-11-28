@@ -5,10 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,10 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,14 +34,15 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
+import com.example.R
 import com.example.data.model.UpdateManifest
+import com.example.update.AppUpdateManager
 
 @Composable
 fun UpdateNotificationBanner(
@@ -74,6 +72,14 @@ fun UpdateNotificationBanner(
                 }
             }
             val currentVersionLabel = "v${BuildConfig.VERSION_NAME} (#${BuildConfig.VERSION_CODE})"
+            val subtitleText = when {
+                manifest.sourceLabel.equals(AppUpdateManager.SOURCE_LABEL_REMOTE_CONFIG, ignoreCase = true) ->
+                    stringResource(R.string.update_banner_remote_config_subtitle)
+                manifest.sourceLabel.startsWith("GitHub") ->
+                    "New release available · Tap to view changelog & update"
+                else ->
+                    "New version detected · Tap to view changelog & update"
+            }
 
             val bannerShape = RoundedCornerShape(28.dp)
 
@@ -84,6 +90,7 @@ fun UpdateNotificationBanner(
                 shape = bannerShape,
                 accented = true,
                 highlightedBorder = false,
+                onClick = onViewDetails,
                 contentPadding = PaddingValues(start = 16.dp, end = 10.dp, top = 14.dp, bottom = 16.dp)
             ) {
                 Column(
@@ -111,7 +118,7 @@ fun UpdateNotificationBanner(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "Update Available",
+                                    text = stringResource(R.string.update_banner_title),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -124,11 +131,7 @@ fun UpdateNotificationBanner(
                                 )
                             }
                             Text(
-                                text = if (manifest.sourceLabel.startsWith("GitHub")) {
-                                    "New tag available · Tap to view & update"
-                                } else {
-                                    "New version detected · Refresh to update"
-                                },
+                                text = subtitleText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.82f),
                                 maxLines = 1,
@@ -144,37 +147,40 @@ fun UpdateNotificationBanner(
                                 .testTag("update_banner_recheck_button")
                         ) {
                             if (isChecking) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
+                                FazaRingLoader(
+                                    contentDescription = "Checking for updates",
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .testTag("update_banner_checking_loader")
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Filled.Refresh,
-                                    contentDescription = "Re-check remote version.json",
+                                    contentDescription = "Re-check for updates",
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
 
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .minimumInteractiveComponentSize()
-                                .testTag("update_banner_dismiss_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = "Dismiss update banner",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(20.dp)
-                            )
+                        if (!manifest.isMandatory) {
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("update_banner_dismiss_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "Dismiss update banner",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
 
-                    // Version comparison card: Current vs Remote version.json
+                    // Version comparison card: Current vs Remote Latest
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLowest,
                         shape = RoundedCornerShape(18.dp),
@@ -237,6 +243,8 @@ fun UpdateNotificationBanner(
                     }
 
                     val highlightNote = manifest.newFeatures.firstOrNull()
+                        ?: manifest.performanceImprovements.firstOrNull()
+                        ?: manifest.bugFixes.firstOrNull()
                     if (!highlightNote.isNullOrBlank()) {
                         Text(
                             text = "What's new: $highlightNote",
@@ -248,7 +256,7 @@ fun UpdateNotificationBanner(
                         )
                     }
 
-                    // Primary Actions: Refresh & Update / View Details
+                    // Primary Actions: Download Update / View Changelog screen
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -264,13 +272,13 @@ fun UpdateNotificationBanner(
                                 .testTag("update_banner_refresh_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Refresh,
+                                imageVector = Icons.Filled.Download,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Refresh & Update",
+                                text = stringResource(R.string.update_banner_download_cta),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 fontWeight = FontWeight.SemiBold
@@ -281,12 +289,12 @@ fun UpdateNotificationBanner(
                             onClick = onViewDetails,
                             shape = CircleShape,
                             modifier = Modifier
-                                .weight(0.8f)
+                                .weight(0.85f)
                                 .height(48.dp)
                                 .testTag("update_banner_details_button")
                         ) {
                             Text(
-                                text = "Changes",
+                                text = stringResource(R.string.update_banner_changelog_cta),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )

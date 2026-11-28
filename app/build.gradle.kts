@@ -17,8 +17,8 @@ android {
     applicationId = "apk.faza.go"
     minSdk = 24
     targetSdk = 36
-    versionCode = 59
-    versionName = "1.57 Beta"
+    versionCode = 70
+    versionName = "1.68 Beta"
 
     manifestPlaceholders["ADMOB_APP_ID"] = "ca-app-pub-6572024129453689~5808434174"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -126,15 +126,12 @@ dependencies {
   implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
-  // Uncomment to use Firestore:
-  // implementation(libs.firebase.firestore)
-
-  // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
-  // Sign-In via Credential Manager:
-  // implementation(libs.firebase.auth)
-  // implementation(libs.androidx.credentials)
-  // implementation(libs.androidx.credentials.play.services)
-  // implementation(libs.googleid)
+  implementation(libs.firebase.config)
+  implementation(libs.firebase.firestore)
+  implementation(libs.firebase.auth)
+  implementation(libs.androidx.credentials)
+  implementation(libs.androidx.credentials.play.services)
+  implementation(libs.googleid)
   implementation(libs.firebase.appcheck.recaptcha)
   implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
@@ -166,6 +163,7 @@ dependencies {
 val exportProjectApk = tasks.register<Copy>("exportProjectApk") {
   val apkSlug = (android.defaultConfig.versionName ?: "latest").replace(" ", "-")
   val apkDir = rootProject.layout.projectDirectory.dir("apk")
+  inputs.property("apkSlug", apkSlug)
   doFirst {
     apkDir.asFile.mkdirs()
     apkDir.asFile.listFiles()?.filter { it.extension.equals("apk", ignoreCase = true) }?.forEach { it.delete() }

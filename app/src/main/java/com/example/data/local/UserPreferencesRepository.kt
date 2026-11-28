@@ -372,7 +372,11 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     suspend fun setCustomThemeColorHex(colorHex: Long) {
-        editSetting { it[Keys.CUSTOM_THEME_COLOR_HEX] = colorHex }
+        editSetting {
+            it[Keys.CUSTOM_THEME_COLOR_HEX] = colorHex
+            it[Keys.APP_COLOR_SOURCE] = AppColorSource.CUSTOM.name
+            it[Keys.DYNAMIC_COLOR] = false
+        }
     }
 
     suspend fun setDecoderMode(mode: DecoderMode) {

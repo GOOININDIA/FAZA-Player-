@@ -93,11 +93,13 @@ import com.example.ui.screens.UpdatesScreen
 import com.example.ui.screens.selectFavoriteVideos
 import com.example.ui.theme.FazaPlayerTheme
 import com.example.ui.viewmodel.AdFreeAccessViewModel
+import com.example.ui.viewmodel.FazaAuthViewModel
 import com.example.ui.viewmodel.LibraryViewModel
 import com.example.ui.viewmodel.PlayerViewModel
 import com.example.ui.viewmodel.ProfileAssistantViewModel
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.ui.viewmodel.UpdateViewModel
+import com.example.update.AppUpdateManager
 import com.example.util.hasAllFilesAccessPermission
 import com.example.util.openSystemAllFilesAccessSettings
 
@@ -130,10 +132,23 @@ class MainActivity : ComponentActivity() {
                 )
             )
             val updateViewModel: UpdateViewModel = viewModel(
-                factory = UpdateViewModel.factory(app.updateRepository, app.preferencesRepository)
+                factory = UpdateViewModel.factory(
+                    updateRepository = app.updateRepository,
+                    preferencesRepository = app.preferencesRepository,
+                    appUpdateManager = app.appUpdateManager
+                )
+            )
+            val fazaAuthViewModel: FazaAuthViewModel = viewModel(
+                factory = FazaAuthViewModel.factory(
+                    authGateway = app.activeAuthGateway(),
+                    accountStore = app.activeAiCloudStore()
+                )
             )
             val profileAssistantViewModel: ProfileAssistantViewModel = viewModel(
-                factory = ProfileAssistantViewModel.factory(app.assistantHistoryStore)
+                factory = ProfileAssistantViewModel.factory(
+                    historyStore = app.assistantHistoryStore,
+                    cloudStore = app.activeAiCloudStore()
+                )
             )
             val adFreeAccessViewModel: AdFreeAccessViewModel = viewModel(
                 factory = AdFreeAccessViewModel.factory(app.preferencesRepository)
@@ -155,6 +170,7 @@ class MainActivity : ComponentActivity() {
                     playerViewModel = playerViewModel,
                     updateViewModel = updateViewModel,
                     settingsViewModel = settingsViewModel,
+                    fazaAuthViewModel = fazaAuthViewModel,
                     profileAssistantViewModel = profileAssistantViewModel,
                     adFreeAccessViewModel = adFreeAccessViewModel
                 )
@@ -197,6 +213,7 @@ private fun FazaAppShell(
     playerViewModel: PlayerViewModel,
     updateViewModel: UpdateViewModel,
     settingsViewModel: SettingsViewModel,
+    fazaAuthViewModel: FazaAuthViewModel,
     profileAssistantViewModel: ProfileAssistantViewModel,
     adFreeAccessViewModel: AdFreeAccessViewModel
 ) {
@@ -210,6 +227,7 @@ private fun FazaAppShell(
     val preferences by settingsViewModel.preferences.collectAsStateWithLifecycle()
     val isPreferencesLoaded by settingsViewModel.isPreferencesLoaded.collectAsStateWithLifecycle()
     val updateState by updateViewModel.checkState.collectAsStateWithLifecycle()
+    val lastCheckedAtMillis by updateViewModel.lastCheckedAtMillis.collectAsStateWithLifecycle()
     val availableBannerManifest by updateViewModel.availableBannerManifest.collectAsStateWithLifecycle()
     val pendingPopup by updateViewModel.pendingPopupManifest.collectAsStateWithLifecycle()
     val showHomeChangelogPopup by updateViewModel.showHomeChangelogPopup.collectAsStateWithLifecycle()
@@ -221,12 +239,28 @@ private fun FazaAppShell(
     val freeAccessStatus by adFreeAccessViewModel.freeAccessStatus.collectAsStateWithLifecycle()
     val isLoadingRewardedAd by adFreeAccessViewModel.isLoadingRewardedAd.collectAsStateWithLifecycle()
     val freeAccessFeedback by adFreeAccessViewModel.feedback.collectAsStateWithLifecycle()
+    val authState by fazaAuthViewModel.authState.collectAsStateWithLifecycle()
+    val authenticatedAccount by fazaAuthViewModel.currentAccount.collectAsStateWithLifecycle()
+    val isAuthBusy by fazaAuthViewModel.isBusy.collectAsStateWithLifecycle()
+    val authUiError by fazaAuthViewModel.authUiError.collectAsStateWithLifecycle()
+    val authError by fazaAuthViewModel.authError.collectAsStateWithLifecycle()
+    val welcomeGreeting by fazaAuthViewModel.welcomeGreeting.collectAsStateWithLifecycle()
     val isInternetConnected = rememberIsInternetConnected()
     val lifecycleOwner = LocalLifecycleOwner.current
     var isProfileAssistantOpen by rememberSaveable { mutableStateOf(false) }
     var hasAttemptedStartupAutoResume by rememberSaveable { mutableStateOf(false) }
     var hasAllFilesAccess by remember { mutableStateOf(hasAllFilesAccessPermission()) }
     var awaitingSystemFileAccessReturn by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        fazaAuthViewModel.attemptSilentSignInIfNeeded(context)
+    }
+
+    LaunchedEffect(authState, authenticatedAccount) {
+        val activeAccount = (authState as? com.example.auth.FazaAuthState.SignedIn)?.account
+            ?: authenticatedAccount
+        profileAssistantViewModel.bindAccount(activeAccount)
+    }
 
     LaunchedEffect(isInternetConnected) {
         adFreeAccessViewModel.onConnectivityChanged(isInternetConnected)
@@ -272,6 +306,7 @@ private fun FazaAppShell(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                fazaAuthViewModel.refreshSessionStatusIfSignedIn()
                 adFreeAccessViewModel.refreshTimer()
                 updateViewModel.checkIfStale()
                 val granted = hasAllFilesAccessPermission()
@@ -298,15 +333,9 @@ private fun FazaAppShell(
     val isSearchSelected = currentDestination?.hasRoute<FazaRoute.Search>() == true
     val isCheckingUpdates = updateState == UpdateCheckState.Checking
     val openRemoteUpdate: (com.example.data.model.UpdateManifest) -> Unit = { manifest ->
-        val url = manifest.downloadUrl.trim()
-        if (url.startsWith("https://") || url.startsWith("http://")) {
-            try {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-            } catch (_: Exception) {
-                updateViewModel.showPopupIfAvailable()
-            }
-        } else {
-            updateViewModel.showPopupIfAvailable()
+        val launched = AppUpdateManager.triggerUpdateDownload(context, manifest)
+        if (!launched) {
+            navController.navigate(FazaRoute.Updates) { launchSingleTop = true }
         }
     }
 
@@ -484,7 +513,7 @@ private fun FazaAppShell(
             nowMs = freeAccessStatus.evaluatedAtMs
         )
         val hasBottomBannerAd = shouldShowBannerAds &&
-            (isHomeRoot || (isProfileSelected && !isProfileAssistantOpen))
+            (isHomeRoot || isFavoritesSelected || (isProfileSelected && !isProfileAssistantOpen))
         val dockOnlyClearance = if (showChrome && !useRail) 78.dp else 0.dp
         val continueButtonSize = when {
             maxWidth < 360.dp -> 52.dp
@@ -541,7 +570,9 @@ private fun FazaAppShell(
                             updateBannerManifest = availableBannerManifest,
                             isCheckingUpdates = isCheckingUpdates,
                             onRefreshUpdate = openRemoteUpdate,
-                            onViewUpdateDetails = { updateViewModel.showPopupIfAvailable() },
+                            onViewUpdateDetails = {
+                                navController.navigate(FazaRoute.Updates) { launchSingleTop = true }
+                            },
                             onRecheckUpdates = { updateViewModel.checkManually() },
                             onDismissUpdateBanner = { updateViewModel.dismissUpdateBanner() },
                             onAutoDetectVideos = { showStatus ->
@@ -656,7 +687,10 @@ private fun FazaAppShell(
                             onTogglePrivate = { libraryViewModel.togglePrivate(it) },
                             onRemoveVideo = { libraryViewModel.removeVideo(it) },
                             onBrowseFolders = { navigateTopLevel(FazaRoute.Folders) },
-                            bottomOverlayPadding = dockBottomClearance
+                            showBannerAd = shouldShowBannerAds,
+                            bottomOverlayPadding = dockBottomClearance,
+                            dockBottomPadding = dockOnlyClearance,
+                            continueOverlayPadding = continueClearance
                         )
                     }
 
@@ -671,6 +705,27 @@ private fun FazaAppShell(
                             assistantViewModel = profileAssistantViewModel,
                             isAssistantOpen = isProfileAssistantOpen,
                             onAssistantOpenChange = { isProfileAssistantOpen = it },
+                            authState = authState,
+                            authenticatedAccount = authenticatedAccount,
+                            isAuthBusy = isAuthBusy,
+                            authUiError = authUiError,
+                            authError = authError,
+                            welcomeGreeting = welcomeGreeting,
+                            onGoogleSignIn = {
+                                hostActivity?.let { activity ->
+                                    fazaAuthViewModel.signInWithGoogle(activity)
+                                }
+                            },
+                            onGoogleSignOut = {
+                                fazaAuthViewModel.signOut(
+                                    context = context,
+                                    onBeforeSignOut = {
+                                        profileAssistantViewModel.detachBeforeSignOut()
+                                    }
+                                )
+                            },
+                            onDismissAuthError = { fazaAuthViewModel.clearError() },
+                            onDismissWelcomeGreeting = { fazaAuthViewModel.dismissWelcomeGreeting() },
                             onPlayVideo = { video ->
                                 navController.navigate(FazaRoute.Player(video.id)) {
                                     launchSingleTop = true
@@ -734,7 +789,10 @@ private fun FazaAppShell(
                             onBack = { navController.popBackStack() },
                             onCheckUpdates = { updateViewModel.checkManually() },
                             onShowAvailableDialog = { updateViewModel.showPopupIfAvailable() },
-                            onSaveManifestUrl = { updateViewModel.updateManifestEndpoint(it) }
+                            onSaveManifestUrl = { updateViewModel.updateManifestEndpoint(it) },
+                            onDownloadUpdate = openRemoteUpdate,
+                            lastCheckedAtMillis = lastCheckedAtMillis,
+                            periodicIntervalMinutes = updateViewModel.periodicIntervalMinutes
                         )
                     }
 
@@ -905,11 +963,7 @@ private fun FazaAppShell(
                 manifest = remoteManifest,
                 onUpdateNow = {
                     updateViewModel.hidePopupTemporarily()
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(remoteManifest.downloadUrl))
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                    }
+                    openRemoteUpdate(remoteManifest)
                 },
                 onLater = {
                     updateViewModel.dismissPopupForLater()

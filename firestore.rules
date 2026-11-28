@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default-deny everything unless explicitly matched and permitted.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable zero-trust helper primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidFazaUserAccount(data) {
+      return data.userId is string && data.userId == request.auth.uid && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.googleSub is string && data.googleSub.size() >= 1 && data.googleSub.size() <= 128 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.provider == 'google.com' &&
+        (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 1024)) &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt) &&
+        isValidTimestamp(data.lastSignInAt);
+    }
+
+    function isValidAiChatMessage(data, userId) {
+      return data.userId is string && data.userId == request.auth.uid && data.userId == userId && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.googleSub is string && data.googleSub.size() >= 1 && data.googleSub.size() <= 128 &&
+        data.role is string && (data.role == 'USER' || data.role == 'ASSISTANT') &&
+        data.text is string && data.text.size() >= 1 && data.text.size() <= 32000 &&
+        data.modelName is string && data.modelName.size() <= 80 &&
+        data.modeLabel is string && data.modeLabel.size() <= 40 &&
+        data.usedGoogleSearch is bool &&
+        data.searchQueries is list && data.searchQueries.size() <= 20 &&
+        (data.searchQueries.size() == 0 || data.searchQueries[0] is string) &&
+        data.sources is list && data.sources.size() <= 10 &&
+        (data.sources.size() == 0 || data.sources[0] is map) &&
+        data.timestampMs is int && data.timestampMs > 0 &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    // Owner-only Google user profile (strict PII isolation: no cross-user get or list).
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        incoming().keys().hasAll([
+          'userId', 'googleSub', 'displayName', 'email', 'provider',
+          'createdAt', 'updatedAt', 'lastSignInAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'googleSub', 'displayName', 'email', 'photoUrl',
+          'provider', 'createdAt', 'updatedAt', 'lastSignInAt'
+        ]) &&
+        isValidFazaUserAccount(incoming());
+
+      allow update: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidFazaUserAccount(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().googleSub == existing().googleSub &&
+        incoming().provider == existing().provider &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'email', 'photoUrl', 'updatedAt', 'lastSignInAt'
+        ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Strictly isolated per-user FAZA AI chat history subcollection.
+      match /ai_messages/{messageId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(messageId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(messageId) &&
+          incoming().keys().hasAll([
+            'userId', 'googleSub', 'role', 'text', 'modelName', 'modeLabel',
+            'usedGoogleSearch', 'searchQueries', 'sources', 'timestampMs',
+            'createdAt', 'updatedAt'
+          ]) &&
+          incoming().keys().hasOnly([
+            'userId', 'googleSub', 'role', 'text', 'modelName', 'modeLabel',
+            'usedGoogleSearch', 'searchQueries', 'sources', 'timestampMs',
+            'createdAt', 'updatedAt'
+          ]) &&
+          isValidAiChatMessage(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(messageId) &&
+          isValidAiChatMessage(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().googleSub == existing().googleSub &&
+          incoming().role == existing().role &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'text', 'modelName', 'modeLabel', 'usedGoogleSearch',
+            'searchQueries', 'sources', 'timestampMs', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(messageId);
+      }
+    }
+  }
+}

@@ -11,15 +11,22 @@ enum class AppColorSource(val label: String, val description: String) {
     CUSTOM("Custom Colour", "Pick a preset palette or craft your own custom color")
 }
 
-enum class AppCustomColorPreset(val label: String, val seedHex: Long) {
-    ELECTRIC_VIOLET("Electric Violet", 0xFF8B5CF6),
-    ROYAL_PURPLE("Royal Violet", 0xFF7C3AED),
-    OCEAN_BLUE("Ocean Blue", 0xFF2563EB),
-    CINEMA_CYAN("Cinema Cyan", 0xFF0891B2),
-    CRIMSON_ROSE("Crimson Rose", 0xFFE11D48),
-    EMERALD_MINT("Emerald Mint", 0xFF059669),
-    SUNSET_AMBER("Sunset Amber", 0xFFD97706),
-    WARM_OLIVE("Warm Olive", 0xFF71610B)
+enum class AppCustomColorPreset(
+    val label: String,
+    val seedHex: Long,
+    val isMonochrome: Boolean = false
+) {
+    OCEAN_BLUE("Blue", 0xFF2563EB),
+    ELECTRIC_VIOLET("Purple", 0xFF8B5CF6),
+    EMERALD_MINT("Green", 0xFF22C55E),
+    CRIMSON_ROSE("Red", 0xFFEF4444),
+    SUNSET_AMBER("Orange", 0xFFF97316),
+    VIBRANT_PINK("Pink", 0xFFEC4899),
+    DEEP_TEAL("Teal", 0xFF0D9488),
+    CINEMA_CYAN("Cyan", 0xFF06B6D4),
+    SOLAR_YELLOW("Yellow", 0xFFEAB308),
+    ROYAL_PURPLE("Deep Purple", 0xFF6750A4),
+    MONOCHROME("Monochrome", 0xFF6B7280, isMonochrome = true)
 }
 
 enum class DecoderMode(val label: String, val badge: String, val description: String) {

@@ -27,7 +27,9 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
@@ -81,6 +83,7 @@ import com.example.data.model.VideoItem
 import com.example.ui.adaptive.calculateAdaptiveLayoutSpec
 import com.example.ui.components.CachedVideoThumbnail
 import com.example.ui.components.FazaAccentGradientButton
+import com.example.ui.components.FazaAdBannerCard
 import com.example.ui.components.FazaAmbientBackdrop
 import com.example.ui.components.FazaBrandLogo
 import com.example.ui.components.FazaGlassCard
@@ -118,7 +121,10 @@ fun FavoritesScreen(
     onTogglePrivate: (VideoItem) -> Unit,
     onRemoveVideo: (Long) -> Unit,
     onBrowseFolders: () -> Unit,
+    showBannerAd: Boolean = false,
     bottomOverlayPadding: Dp = 0.dp,
+    dockBottomPadding: Dp = bottomOverlayPadding,
+    continueOverlayPadding: Dp = 0.dp,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -158,7 +164,7 @@ fun FavoritesScreen(
                     hostState = snackbarHostState,
                     modifier = Modifier
                         .navigationBarsPadding()
-                        .padding(bottom = bottomOverlayPadding)
+                        .padding(bottom = bottomOverlayPadding + if (showBannerAd) 76.dp else 0.dp)
                 )
             },
             topBar = {
@@ -199,24 +205,39 @@ fun FavoritesScreen(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.TopCenter
+                    .padding(innerPadding)
             ) {
                 val adaptiveSpec = calculateAdaptiveLayoutSpec(maxWidth, maxHeight)
                 val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                val contentBottomPadding = if (showBannerAd) {
+                    12.dp + continueOverlayPadding
+                } else {
+                    16.dp + bottomOverlayPadding + navBarBottom
+                }
 
-                if (favoriteVideos.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(
-                                start = adaptiveSpec.horizontalPadding,
-                                end = adaptiveSpec.horizontalPadding,
-                                top = 20.dp,
-                                bottom = 16.dp + bottomOverlayPadding + navBarBottom
-                            ),
+                            .weight(1f)
+                            .fillMaxWidth(),
                         contentAlignment = Alignment.TopCenter
                     ) {
+                        if (favoriteVideos.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(
+                                        start = adaptiveSpec.horizontalPadding,
+                                        end = adaptiveSpec.horizontalPadding,
+                                        top = 20.dp,
+                                        bottom = contentBottomPadding
+                                    ),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
                         FazaGlassCard(
                             accented = true,
                             shape = RoundedCornerShape(24.dp),
@@ -318,7 +339,7 @@ fun FavoritesScreen(
                             start = adaptiveSpec.horizontalPadding,
                             end = adaptiveSpec.horizontalPadding,
                             top = 12.dp,
-                            bottom = 16.dp + bottomOverlayPadding + navBarBottom
+                            bottom = contentBottomPadding
                         ),
                         horizontalArrangement = Arrangement.spacedBy(adaptiveSpec.contentSpacing),
                         verticalArrangement = Arrangement.spacedBy(adaptiveSpec.contentSpacing)
@@ -348,6 +369,25 @@ fun FavoritesScreen(
                                 onTogglePrivate = { onTogglePrivate(video) },
                                 onRemove = { onRemoveVideo(video.id) }
                             )
+                        }
+                    }
+                        }
+                    }
+
+                    if (showBannerAd) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .widthIn(max = 560.dp)
+                                .padding(
+                                    start = adaptiveSpec.horizontalPadding,
+                                    end = adaptiveSpec.horizontalPadding,
+                                    top = 6.dp,
+                                    bottom = dockBottomPadding + navBarBottom + 8.dp
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            FazaAdBannerCard(testTag = "favorites_ad_banner")
                         }
                     }
                 }

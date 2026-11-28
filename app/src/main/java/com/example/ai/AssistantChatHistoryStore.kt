@@ -2,6 +2,7 @@ package com.example.ai
 
 import android.content.Context
 import android.util.Log
+import com.example.auth.computeAccountStorageKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -12,12 +13,17 @@ import java.io.File
 
 private const val HISTORY_STORE_TAG = "AssistantHistoryStore"
 private const val HISTORY_FILE_NAME = "assistant_chat_history.json"
+private const val ACCOUNT_HISTORY_DIR = "faza_ai_accounts"
 private const val MAX_PERSISTED_MESSAGES = 250
 
 class AssistantChatHistoryStore(
-    private val historyFile: File
+    private val historyFile: File,
+    private val accountsBaseDir: File = File(historyFile.parentFile ?: File("."), ACCOUNT_HISTORY_DIR)
 ) {
-    constructor(context: Context) : this(File(context.applicationContext.filesDir, HISTORY_FILE_NAME))
+    constructor(context: Context) : this(
+        historyFile = File(context.applicationContext.filesDir, HISTORY_FILE_NAME),
+        accountsBaseDir = File(context.applicationContext.filesDir, ACCOUNT_HISTORY_DIR)
+    )
 
     private val mutex = Mutex()
     private val json = Json {
@@ -25,11 +31,41 @@ class AssistantChatHistoryStore(
         encodeDefaults = true
     }
 
-    suspend fun loadMessages(): List<AssistantChatMessage> = withContext(Dispatchers.IO) {
+    /**
+     * Resolves an isolated, deterministic file strictly scoped to [accountId] (Google `sub`).
+     * Never shares history between different Google accounts.
+     */
+    internal fun fileForAccount(accountId: String): File {
+        val storageKey = computeAccountStorageKey(accountId)
+        return File(accountsBaseDir, "chat_$storageKey.json")
+    }
+
+    suspend fun loadMessages(accountId: String): List<AssistantChatMessage> {
+        if (accountId.isBlank()) return emptyList()
+        return loadFromFile(fileForAccount(accountId))
+    }
+
+    suspend fun saveMessages(accountId: String, messages: List<AssistantChatMessage>) {
+        if (accountId.isBlank()) return
+        saveToFile(fileForAccount(accountId), messages)
+    }
+
+    suspend fun clear(accountId: String) {
+        if (accountId.isBlank()) return
+        clearFile(fileForAccount(accountId))
+    }
+
+    suspend fun loadMessages(): List<AssistantChatMessage> = loadFromFile(historyFile)
+
+    suspend fun saveMessages(messages: List<AssistantChatMessage>) = saveToFile(historyFile, messages)
+
+    suspend fun clear() = clearFile(historyFile)
+
+    private suspend fun loadFromFile(targetFile: File): List<AssistantChatMessage> = withContext(Dispatchers.IO) {
         mutex.withLock {
-            if (!historyFile.exists()) return@withLock emptyList()
+            if (!targetFile.exists()) return@withLock emptyList()
             runCatching {
-                val raw = historyFile.readText()
+                val raw = targetFile.readText()
                 if (raw.isBlank()) return@withLock emptyList()
                 json.decodeFromString<List<AssistantChatMessage>>(raw)
                     .filter { it.text.isNotBlank() }
@@ -43,7 +79,10 @@ class AssistantChatHistoryStore(
         }
     }
 
-    suspend fun saveMessages(messages: List<AssistantChatMessage>) = withContext(Dispatchers.IO) {
+    private suspend fun saveToFile(
+        targetFile: File,
+        messages: List<AssistantChatMessage>
+    ) = withContext(Dispatchers.IO) {
         mutex.withLock {
             runCatching {
                 val sanitized = messages
@@ -52,16 +91,16 @@ class AssistantChatHistoryStore(
                     .sortedBy { it.timestampMs }
                     .takeLast(MAX_PERSISTED_MESSAGES)
                 if (sanitized.isEmpty()) {
-                    if (historyFile.exists()) {
-                        historyFile.delete()
+                    if (targetFile.exists()) {
+                        targetFile.delete()
                     }
                     return@withLock
                 }
-                historyFile.parentFile?.mkdirs()
-                val tempFile = File(historyFile.parentFile, "$HISTORY_FILE_NAME.tmp")
+                targetFile.parentFile?.mkdirs()
+                val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
                 tempFile.writeText(json.encodeToString(sanitized))
-                if (!tempFile.renameTo(historyFile)) {
-                    historyFile.writeText(json.encodeToString(sanitized))
+                if (!tempFile.renameTo(targetFile)) {
+                    targetFile.writeText(json.encodeToString(sanitized))
                     tempFile.delete()
                 }
             }.onFailure { error ->
@@ -70,11 +109,11 @@ class AssistantChatHistoryStore(
         }
     }
 
-    suspend fun clear() = withContext(Dispatchers.IO) {
+    private suspend fun clearFile(targetFile: File) = withContext(Dispatchers.IO) {
         mutex.withLock {
             runCatching {
-                if (historyFile.exists()) {
-                    historyFile.delete()
+                if (targetFile.exists()) {
+                    targetFile.delete()
                 }
             }.onFailure { error ->
                 Log.e(HISTORY_STORE_TAG, "Failed to clear assistant chat history", error)

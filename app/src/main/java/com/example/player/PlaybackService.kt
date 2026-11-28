@@ -14,10 +14,12 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.FazaApplication
 import com.example.MainActivity
+import com.example.R
 import com.example.data.model.DecoderMode
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -27,6 +29,13 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
+            .build()
+            .apply {
+                setSmallIcon(R.drawable.ic_notification_faza)
+            }
+        setMediaNotificationProvider(notificationProvider)
+
         val app = application as FazaApplication
         val player = app.playerManager.getOrCreatePlayer(this)
 

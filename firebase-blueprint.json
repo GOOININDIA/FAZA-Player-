@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "FazaUserAccount": {
+      "title": "FazaUserAccount",
+      "description": "Authenticated Google user account linked to FAZA AI, keyed by Firebase Auth UID and storing the unique Google subject ID (sub).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID and request.auth.uid."
+        },
+        "googleSub": {
+          "type": "string",
+          "description": "Unique immutable Google account subject identifier (sub) used to identify the FAZA AI session."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User full display name from Google profile."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User Gmail address from verified Google account."
+        },
+        "photoUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional Google profile picture URL (omitted when absent)."
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["google.com"],
+          "description": "Authentication identity provider."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() on initial account creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() on profile updates."
+        },
+        "lastSignInAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() on sign-in."
+        }
+      },
+      "required": [
+        "userId",
+        "googleSub",
+        "displayName",
+        "email",
+        "provider",
+        "createdAt",
+        "updatedAt",
+        "lastSignInAt"
+      ]
+    },
+    "FazaAiChatMessage": {
+      "title": "FazaAiChatMessage",
+      "description": "Private FAZA AI chat message isolated inside the owning user's subcollection.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owning Firebase Auth UID matching parent userId and request.auth.uid."
+        },
+        "googleSub": {
+          "type": "string",
+          "description": "Unique Google account subject identifier (sub) associated with the FAZA AI session."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["USER", "ASSISTANT"],
+          "description": "Message author role."
+        },
+        "text": {
+          "type": "string",
+          "description": "Message body text."
+        },
+        "modelName": {
+          "type": "string",
+          "description": "Gemini model identifier used for assistant replies."
+        },
+        "modeLabel": {
+          "type": "string",
+          "description": "Short label of the active assistant mode."
+        },
+        "usedGoogleSearch": {
+          "type": "boolean",
+          "description": "Whether Google Search grounding was used for this message."
+        },
+        "searchQueries": {
+          "type": "array",
+          "description": "Bounded list of grounding search queries (max 20)."
+        },
+        "sources": {
+          "type": "array",
+          "description": "Bounded list of grounding web sources (max 10)."
+        },
+        "timestampMs": {
+          "type": "integer",
+          "description": "Client ordering epoch timestamp in milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() on message creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() on message updates."
+        }
+      },
+      "required": [
+        "userId",
+        "googleSub",
+        "role",
+        "text",
+        "modelName",
+        "modeLabel",
+        "usedGoogleSearch",
+        "searchQueries",
+        "sources",
+        "timestampMs",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/FazaUserAccount"
+      },
+      "description": "Owner-only FAZA AI Google account profile document storing unique Google sub ID and profile metadata."
+    },
+    "/users/{userId}/ai_messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/FazaAiChatMessage"
+      },
+      "description": "Strictly isolated per-user FAZA AI conversation messages accessible only to the owning Google account."
+    }
+  }
+}

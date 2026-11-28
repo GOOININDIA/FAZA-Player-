@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -50,10 +49,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.ads.FreeAccessStatus
-import com.example.ui.theme.FazaNavActivePurpleDark
-import com.example.ui.theme.FazaNavActivePurpleLight
-import com.example.ui.theme.FazaNavOnActivePurple
-import com.example.ui.theme.LocalFazaIsDark
 import com.example.ui.viewmodel.FreeAccessFeedback
 import com.example.ui.viewmodel.FreeAccessFeedbackType
 
@@ -68,8 +63,7 @@ fun FreeAccessSectionCard(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val isDark = LocalFazaIsDark.current
-    val accentPurple = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight
+    val accentColor = colors.primary
     val animatedAdProgress by animateFloatAsState(
         targetValue = status.progressFraction,
         animationSpec = tween(durationMillis = 280),
@@ -173,7 +167,7 @@ fun FreeAccessSectionCard(
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = colors.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, accentPurple.copy(alpha = 0.35f)),
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -194,7 +188,7 @@ fun FreeAccessSectionCard(
                                 Icon(
                                     imageVector = Icons.Filled.Schedule,
                                     contentDescription = null,
-                                    tint = accentPurple,
+                                    tint = accentColor,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
@@ -212,7 +206,7 @@ fun FreeAccessSectionCard(
 
                         LinearProgressIndicator(
                             progress = { animatedTimeProgress },
-                            color = accentPurple,
+                            color = accentColor,
                             trackColor = colors.surfaceContainerHighest,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -254,13 +248,13 @@ fun FreeAccessSectionCard(
                             )
                             Surface(
                                 shape = CircleShape,
-                                color = accentPurple.copy(alpha = 0.16f)
+                                color = accentColor.copy(alpha = 0.16f)
                             ) {
                                 Text(
                                     text = status.progressPercentText,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = accentPurple,
+                                    color = accentColor,
                                     modifier = Modifier
                                         .padding(horizontal = 8.dp, vertical = 3.dp)
                                         .testTag("free_access_progress_percent")
@@ -270,7 +264,7 @@ fun FreeAccessSectionCard(
 
                         LinearProgressIndicator(
                             progress = { animatedAdProgress },
-                            color = accentPurple,
+                            color = accentColor,
                             trackColor = colors.surfaceContainerHighest,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -313,8 +307,8 @@ fun FreeAccessSectionCard(
                     enabled = isOnline && !isLoadingAd,
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = accentPurple,
-                        contentColor = FazaNavOnActivePurple,
+                        containerColor = accentColor,
+                        contentColor = colors.onPrimary,
                         disabledContainerColor = colors.surfaceContainerHighest,
                         disabledContentColor = colors.onSurfaceVariant
                     ),
@@ -325,10 +319,11 @@ fun FreeAccessSectionCard(
                 ) {
                     when {
                         isLoadingAd -> {
-                            CircularProgressIndicator(
-                                strokeWidth = 2.dp,
-                                color = colors.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
+                            FazaRingLoader(
+                                contentDescription = "Loading rewarded ad",
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .testTag("free_access_loading_loader")
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(

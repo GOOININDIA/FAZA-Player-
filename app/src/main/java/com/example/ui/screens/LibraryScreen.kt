@@ -35,8 +35,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -83,6 +81,7 @@ import com.example.data.model.ThemeMode
 import com.example.data.model.UpdateManifest
 import com.example.data.model.VideoItem
 import com.example.ui.components.FazaBrandLogo
+import com.example.ui.components.FazaGlassCard
 import com.example.ui.components.RecentVideoChipCard
 import com.example.ui.components.TopRightSettingsButton
 import com.example.ui.components.UpdateNotificationBanner
@@ -404,11 +403,9 @@ fun LibraryScreen(
                 // Auto-Detect Device Folders Banner (shown until at least one device folder is linked)
                 if (state.linkedFolderCount == 0 && state.searchQuery.isBlank() && state.activeSection == LibrarySection.ALL) {
                     item {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
-                            ),
-                            shape = MaterialTheme.shapes.medium,
+                        FazaGlassCard(
+                            accented = true,
+                            shape = RoundedCornerShape(22.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
@@ -478,11 +475,9 @@ fun LibraryScreen(
                 // Private Vault Unlocked Banner
                 if (state.activeSection == LibrarySection.PRIVATE && state.hasPrivatePin && state.isPrivateUnlocked) {
                     item {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                            ),
-                            shape = MaterialTheme.shapes.medium,
+                        FazaGlassCard(
+                            accented = true,
+                            shape = RoundedCornerShape(22.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)

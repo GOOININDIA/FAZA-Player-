@@ -682,9 +682,9 @@ internal fun SettingsAboutFolderContent(
     ) {
         // 1. Modern App Identity & Update Status Hero Card
         item(key = "about_application_card") {
-            Surface(
+            FazaGlassCard(
                 shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                accented = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("about_application_card")

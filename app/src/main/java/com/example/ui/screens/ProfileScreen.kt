@@ -2,9 +2,13 @@ package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -60,12 +64,17 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,6 +94,11 @@ import com.example.R
 import com.example.ads.AdFreeAccessPolicy
 import com.example.ads.FreeAccessStatus
 import com.example.ai.AssistantChatMode
+import com.example.auth.FazaAuthState
+import com.example.auth.FazaAuthUiError
+import com.example.auth.FazaGoogleAccount
+import com.example.auth.ProfileWelcomeGreeting
+import com.example.auth.classifyAuthError
 import com.example.data.model.FolderSummary
 import com.example.data.model.UpdateCheckState
 import com.example.data.model.UserPreferences
@@ -92,24 +106,29 @@ import com.example.data.model.VideoItem
 import androidx.compose.ui.graphics.Color
 import com.example.ui.adaptive.calculateAdaptiveLayoutSpec
 import com.example.ui.components.FazaAdBannerCard
+import com.example.ui.components.FazaAiSignInGateCard
 import com.example.ui.components.FazaAmbientBackdrop
 import com.example.ui.components.FazaBrandLogo
 import com.example.ui.components.FazaGlassCard
 import com.example.ui.components.FazaGlassIconBadge
 import com.example.ui.components.FazaGlassPillBadge
 import com.example.ui.components.FreeAccessSectionCard
+import com.example.ui.components.GoogleAccountAvatar
 import com.example.ui.components.ProfileAssistantPanel
+import com.example.ui.components.ProfileErrorBoundaryBanner
+import com.example.ui.components.ProfileErrorSnackbarVisuals
+import com.example.ui.components.ProfileCompactHeaderGreeting
+import com.example.ui.components.ProfileGoogleAccountCard
+import com.example.ui.components.ProfileNotificationSnackbarHost
+import com.example.ui.components.ProfileWelcomeGreetingHeader
 import com.example.ui.components.RecentVideoChipCard
 import com.example.ui.components.VideoListCard
 import com.example.ui.components.isVideoEligibleForContinuePlaying
 import com.example.ui.components.rememberFazaGlassBorderBrush
-import com.example.ui.theme.FazaNavActivePurpleDark
-import com.example.ui.theme.FazaNavActivePurpleLight
 import com.example.ui.theme.FazaNavBorderDark
 import com.example.ui.theme.FazaNavBorderLight
 import com.example.ui.theme.FazaNavInactiveDark
 import com.example.ui.theme.FazaNavInactiveLight
-import com.example.ui.theme.FazaNavOnActivePurple
 import com.example.ui.theme.FazaNavSurfaceDark
 import com.example.ui.theme.FazaNavSurfaceLight
 import com.example.ui.theme.LocalFazaIsDark
@@ -129,6 +148,16 @@ fun ProfileScreen(
     assistantViewModel: ProfileAssistantViewModel,
     isAssistantOpen: Boolean,
     onAssistantOpenChange: (Boolean) -> Unit,
+    authenticatedAccount: FazaGoogleAccount? = null,
+    authState: FazaAuthState = authenticatedAccount?.let { FazaAuthState.SignedIn(it) } ?: FazaAuthState.SignedOut,
+    isAuthBusy: Boolean = false,
+    authUiError: FazaAuthUiError? = null,
+    authError: String? = null,
+    welcomeGreeting: ProfileWelcomeGreeting? = null,
+    onGoogleSignIn: () -> Unit = {},
+    onGoogleSignOut: () -> Unit = {},
+    onDismissAuthError: () -> Unit = {},
+    onDismissWelcomeGreeting: () -> Unit = {},
     onPlayVideo: (VideoItem) -> Unit,
     onToggleFavourite: (VideoItem) -> Unit,
     onTogglePrivate: (VideoItem) -> Unit,
@@ -153,6 +182,48 @@ fun ProfileScreen(
     modifier: Modifier = Modifier
 ) {
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val effectiveAccount = when (authState) {
+        is FazaAuthState.SignedIn -> authState.account
+        is FazaAuthState.SignedOut,
+        is FazaAuthState.SessionExpired -> null
+        is FazaAuthState.SigningIn -> authenticatedAccount
+    }
+    val effectiveAuthBusy = isAuthBusy || authState is FazaAuthState.SigningIn
+    val resolvedAuthUiError = remember(authUiError, authError, authState) {
+        authUiError ?: when {
+            authState is FazaAuthState.SessionExpired ->
+                classifyAuthError(
+                    com.example.auth.AuthSessionExpiredException(authState.reason),
+                    id = authState.reason.hashCode().toLong()
+                )
+            !authError.isNullOrBlank() ->
+                classifyAuthError(IllegalStateException(authError), id = authError.hashCode().toLong())
+            else -> null
+        }
+    }
+    val snackbarBottomOffset = bottomOverlayPadding + if (showBannerAd && !isAssistantOpen) 68.dp else 0.dp
+
+    LaunchedEffect(resolvedAuthUiError?.id) {
+        val currentError = resolvedAuthUiError
+        if (currentError == null) {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            return@LaunchedEffect
+        }
+        snackbarHostState.currentSnackbarData?.dismiss()
+        val result = snackbarHostState.showSnackbar(
+            ProfileErrorSnackbarVisuals(
+                uiError = currentError,
+                duration = SnackbarDuration.Long,
+                withDismissAction = true
+            )
+        )
+        if (result == SnackbarResult.ActionPerformed && currentError.canRetry) {
+            onDismissAuthError()
+            onGoogleSignIn()
+        }
+    }
+
     val favourites = remember(videos) { videos.filter { it.isFavourite } }
     val continueWatching = remember(videos) {
         videos.filter { isVideoEligibleForContinuePlaying(it) }
@@ -176,6 +247,12 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
+            snackbarHost = {
+                ProfileNotificationSnackbarHost(
+                    hostState = snackbarHostState,
+                    bottomPadding = snackbarBottomOffset
+                )
+            },
             topBar = {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -185,7 +262,27 @@ fun ProfileScreen(
                         actionIconContentColor = MaterialTheme.colorScheme.onBackground
                     ),
                     title = {
-                        FazaBrandLogo(subtitle = if (isAssistantOpen) "AI Assistant" else "Profile")
+                        AnimatedContent(
+                            targetState = if (isAssistantOpen && effectiveAccount != null) welcomeGreeting else null,
+                            transitionSpec = {
+                                (fadeIn(tween(240)) + slideInVertically(
+                                    spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    )
+                                ) { -it / 2 }) togetherWith fadeOut(tween(180))
+                            },
+                            label = "profile_topbar_greeting_transition"
+                        ) { compactGreeting ->
+                            if (compactGreeting != null) {
+                                ProfileCompactHeaderGreeting(
+                                    greeting = compactGreeting,
+                                    onDismiss = onDismissWelcomeGreeting
+                                )
+                            } else {
+                                FazaBrandLogo(subtitle = if (isAssistantOpen) "AI Assistant" else "Profile")
+                            }
+                        }
                     }
                 )
             }
@@ -203,10 +300,11 @@ fun ProfileScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val isDark = LocalFazaIsDark.current
+                val themeColors = MaterialTheme.colorScheme
                 val segmentedColors = SegmentedButtonDefaults.colors(
-                    activeContainerColor = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight,
-                    activeContentColor = FazaNavOnActivePurple,
-                    activeBorderColor = if (isDark) FazaNavActivePurpleDark else FazaNavActivePurpleLight,
+                    activeContainerColor = themeColors.primary,
+                    activeContentColor = themeColors.onPrimary,
+                    activeBorderColor = themeColors.primary,
                     inactiveContainerColor = if (isDark) FazaNavSurfaceDark else FazaNavSurfaceLight,
                     inactiveContentColor = if (isDark) FazaNavInactiveDark else FazaNavInactiveLight,
                     inactiveBorderColor = if (isDark) FazaNavBorderDark else FazaNavBorderLight
@@ -259,6 +357,29 @@ fun ProfileScreen(
                     }
                 }
 
+                ProfileWelcomeGreetingHeader(
+                    greeting = if (!isAssistantOpen && effectiveAccount != null) welcomeGreeting else null,
+                    onDismiss = onDismissWelcomeGreeting,
+                    modifier = Modifier
+                        .widthIn(max = adaptiveSpec.maxContentWidth)
+                        .fillMaxWidth()
+                        .padding(horizontal = adaptiveSpec.horizontalPadding, vertical = 4.dp)
+                )
+
+                ProfileErrorBoundaryBanner(
+                    uiError = resolvedAuthUiError,
+                    isBusy = effectiveAuthBusy,
+                    onRetrySignIn = {
+                        onDismissAuthError()
+                        onGoogleSignIn()
+                    },
+                    onDismiss = onDismissAuthError,
+                    modifier = Modifier
+                        .widthIn(max = adaptiveSpec.maxContentWidth)
+                        .fillMaxWidth()
+                        .padding(horizontal = adaptiveSpec.horizontalPadding, vertical = 4.dp)
+                )
+
                 AnimatedContent(
                     targetState = isAssistantOpen,
                     transitionSpec = {
@@ -270,20 +391,34 @@ fun ProfileScreen(
                         .fillMaxWidth()
                 ) { showAssistant ->
                     if (showAssistant) {
-                        ProfileAssistantPanel(
-                            messages = assistantMessages,
-                            uiState = assistantUiState,
-                            selectedMode = assistantMode,
-                            searchGroundingEnabled = searchGroundingEnabled,
-                            canRetry = lastFailedPrompt != null,
-                            onSelectMode = { assistantViewModel.selectMode(it) },
-                            onToggleSearchGrounding = { assistantViewModel.setSearchGroundingEnabled(it) },
-                            onSendMessage = { assistantViewModel.sendMessage(it) },
-                            onStopGenerating = { assistantViewModel.stopGenerating() },
-                            onRetryLast = { assistantViewModel.retryLastFailed() },
-                            onClearConversation = { assistantViewModel.clearConversation() },
-                            bottomOverlayPadding = bottomOverlayPadding
-                        )
+                        val activeAccount = effectiveAccount
+                        if (activeAccount == null) {
+                            FazaAiSignInGateCard(
+                                isBusy = effectiveAuthBusy,
+                                authError = authError,
+                                onSignInClick = onGoogleSignIn,
+                                onDismissError = onDismissAuthError,
+                                showInlineError = false,
+                                bottomOverlayPadding = bottomOverlayPadding + navBarBottom
+                            )
+                        } else {
+                            key(activeAccount.firebaseUid) {
+                                ProfileAssistantPanel(
+                                    messages = assistantMessages,
+                                    uiState = assistantUiState,
+                                    selectedMode = assistantMode,
+                                    searchGroundingEnabled = searchGroundingEnabled,
+                                    canRetry = lastFailedPrompt != null,
+                                    onSelectMode = { assistantViewModel.selectMode(it) },
+                                    onToggleSearchGrounding = { assistantViewModel.setSearchGroundingEnabled(it) },
+                                    onSendMessage = { assistantViewModel.sendMessage(it) },
+                                    onStopGenerating = { assistantViewModel.stopGenerating() },
+                                    onRetryLast = { assistantViewModel.retryLastFailed() },
+                                    onClearConversation = { assistantViewModel.clearConversation() },
+                                    bottomOverlayPadding = bottomOverlayPadding
+                                )
+                            }
+                        }
                     } else {
                         val profileGridBottomPadding = if (showBannerAd) {
                             12.dp + continueOverlayPadding
@@ -317,6 +452,21 @@ fun ProfileScreen(
                                 ) {
                                 if (adaptiveSpec.useTwoPane) {
                                     item(
+                                        key = "profile_google_account_card_row",
+                                        span = { GridItemSpan(maxLineSpan) }
+                                    ) {
+                                        ProfileGoogleAccountCard(
+                                            account = effectiveAccount,
+                                            isBusy = effectiveAuthBusy,
+                                            authError = authError,
+                                            onSignInClick = onGoogleSignIn,
+                                            onSignOutClick = onGoogleSignOut,
+                                            onDismissError = onDismissAuthError,
+                                            showInlineError = false,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                    item(
                                         key = "profile_hero_and_ai_row",
                                         span = { GridItemSpan(maxLineSpan) }
                                     ) {
@@ -331,16 +481,20 @@ fun ProfileScreen(
                                                 favouritesCount = favourites.size,
                                                 totalDurationMs = totalDurationMs,
                                                 preferences = preferences,
+                                                authenticatedAccount = effectiveAccount,
                                                 useTwoByTwoStats = containerWidth < 900.dp,
                                                 modifier = Modifier.weight(1f)
                                             )
                                             ProfileAiLauncherCard(
-                                                assistantMessagesCount = assistantMessages.size,
+                                                assistantMessagesCount = if (effectiveAccount != null) assistantMessages.size else 0,
+                                                isSignedIn = effectiveAccount != null,
                                                 onOpenAssistant = { onAssistantOpenChange(true) },
                                                 onSendTrendingPrompt = {
-                                                    assistantViewModel.selectMode(AssistantChatMode.GENERAL_SEARCH)
                                                     onAssistantOpenChange(true)
-                                                    assistantViewModel.sendMessage("Search for trending 4K HDR movies and series released recently.")
+                                                    if (effectiveAccount != null) {
+                                                        assistantViewModel.selectMode(AssistantChatMode.GENERAL_SEARCH)
+                                                        assistantViewModel.sendMessage("Search for trending 4K HDR movies and series released recently.")
+                                                    }
                                                 },
                                                 modifier = Modifier.weight(1f)
                                             )
@@ -354,7 +508,24 @@ fun ProfileScreen(
                                             favouritesCount = favourites.size,
                                             totalDurationMs = totalDurationMs,
                                             preferences = preferences,
+                                            authenticatedAccount = effectiveAccount,
                                             useTwoByTwoStats = adaptiveSpec.isUltraCompactWidth,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    item(
+                                        key = "profile_google_account_card",
+                                        span = { GridItemSpan(maxLineSpan) }
+                                    ) {
+                                        ProfileGoogleAccountCard(
+                                            account = effectiveAccount,
+                                            isBusy = effectiveAuthBusy,
+                                            authError = authError,
+                                            onSignInClick = onGoogleSignIn,
+                                            onSignOutClick = onGoogleSignOut,
+                                            onDismissError = onDismissAuthError,
+                                            showInlineError = false,
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
@@ -364,12 +535,15 @@ fun ProfileScreen(
                                         span = { GridItemSpan(maxLineSpan) }
                                     ) {
                                         ProfileAiLauncherCard(
-                                            assistantMessagesCount = assistantMessages.size,
+                                            assistantMessagesCount = if (effectiveAccount != null) assistantMessages.size else 0,
+                                            isSignedIn = effectiveAccount != null,
                                             onOpenAssistant = { onAssistantOpenChange(true) },
                                             onSendTrendingPrompt = {
-                                                assistantViewModel.selectMode(AssistantChatMode.GENERAL_SEARCH)
                                                 onAssistantOpenChange(true)
-                                                assistantViewModel.sendMessage("Search for trending 4K HDR movies and series released recently.")
+                                                if (effectiveAccount != null) {
+                                                    assistantViewModel.selectMode(AssistantChatMode.GENERAL_SEARCH)
+                                                    assistantViewModel.sendMessage("Search for trending 4K HDR movies and series released recently.")
+                                                }
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -511,12 +685,8 @@ fun ProfileScreen(
                                         key = "profile_empty_activity",
                                         span = { GridItemSpan(maxLineSpan) }
                                     ) {
-                                        Card(
-                                            shape = MaterialTheme.shapes.large,
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                                            ),
-                                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                        FazaGlassCard(
+                                            shape = RoundedCornerShape(24.dp),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Column(
@@ -565,15 +735,10 @@ fun ProfileScreen(
 
                                 // Library Summary Footer
                                 item(key = "profile_footer", span = { GridItemSpan(maxLineSpan) }) {
-                                    Card(
-                                        shape = MaterialTheme.shapes.large,
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                                        ),
-                                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable(onClick = onOpenSettings)
+                                    FazaGlassCard(
+                                        shape = RoundedCornerShape(22.dp),
+                                        onClick = onOpenSettings,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Row(
                                             modifier = Modifier
@@ -645,6 +810,7 @@ private fun ProfileHeroCard(
     favouritesCount: Int,
     totalDurationMs: Long,
     preferences: UserPreferences,
+    authenticatedAccount: FazaGoogleAccount? = null,
     useTwoByTwoStats: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -664,32 +830,71 @@ private fun ProfileHeroCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(if (useTwoByTwoStats) 44.dp else 48.dp)
-                        .clip(CircleShape)
-                        .background(colors.primary.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Person,
-                        contentDescription = "User Profile",
-                        tint = colors.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
+                AnimatedContent(
+                    targetState = authenticatedAccount,
+                    transitionSpec = {
+                        (fadeIn(tween(240)) + slideInVertically(
+                            spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        ) { it / 4 }) togetherWith (fadeOut(tween(150)) + slideOutVertically(tween(150)) { -it / 4 })
+                    },
+                    label = "profile_hero_avatar_transition"
+                ) { account ->
+                    if (account != null) {
+                        GoogleAccountAvatar(
+                            photoUrl = account.photoUrl,
+                            displayName = account.resolvedDisplayName,
+                            size = if (useTwoByTwoStats) 44.dp else 48.dp
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(if (useTwoByTwoStats) 44.dp else 48.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Person,
+                                contentDescription = "User Profile",
+                                tint = colors.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text(
-                        text = "Personal Cinema",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    AnimatedContent(
+                        targetState = authenticatedAccount?.resolvedDisplayName,
+                        transitionSpec = {
+                            (fadeIn(tween(260)) + slideInVertically(
+                                spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            ) { it / 2 }) togetherWith (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                        },
+                        label = "profile_hero_greeting_transition"
+                    ) { signedInName ->
+                        Text(
+                            text = if (signedInName != null) {
+                                stringResource(R.string.profile_welcome_greeting, signedInName)
+                            } else {
+                                "Personal Cinema"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("profile_hero_greeting_title")
+                        )
+                    }
                     Text(
                         text = "${stringResource(R.string.app_name)} · v${BuildConfig.VERSION_NAME} · ${preferences.decoderMode.badge}",
                         style = MaterialTheme.typography.bodySmall,
@@ -786,6 +991,7 @@ private fun ProfileHeroCard(
 @Composable
 private fun ProfileAiLauncherCard(
     assistantMessagesCount: Int,
+    isSignedIn: Boolean = false,
     onOpenAssistant: () -> Unit,
     onSendTrendingPrompt: () -> Unit,
     modifier: Modifier = Modifier
@@ -818,7 +1024,11 @@ private fun ProfileAiLauncherCard(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Chat & search for movies, formats, and playback tips",
+                        text = if (isSignedIn) {
+                            "Chat & search for movies, formats, and playback tips"
+                        } else {
+                            stringResource(R.string.google_auth_ai_launcher_signed_out_subtitle)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -881,7 +1091,11 @@ private fun ProfileAiLauncherCard(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = if (assistantMessagesCount > 0) "Continue chat" else "Start chatting",
+                            text = when {
+                                !isSignedIn -> "Sign in to chat"
+                                assistantMessagesCount > 0 -> "Continue chat"
+                                else -> "Start chatting"
+                            },
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
